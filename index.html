@@ -35,22 +35,38 @@
   h2{font-size:26px;text-align:center;margin-bottom:8px;}
   .section-sub{text-align:center;color:var(--text-muted);margin-bottom:40px;font-size:14px;}
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px;}
-  .card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:10px;padding:24px;}
+  .card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:10px;padding:24px;transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease;}
+  .card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 8px 20px rgba(201,162,39,0.15);}
   .card h3{color:var(--gold-light);font-size:17px;margin-bottom:10px;}
   .card p{color:var(--text-muted);font-size:14px;}
+  .stats{display:flex;gap:40px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+  .stat{text-align:center;}
+  .stat-num{font-size:32px;font-weight:700;color:var(--gold-light);}
+  .stat-label{font-size:13px;color:var(--text-muted);margin-top:4px;}
   .tags{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:30px;}
   .tag{background:rgba(201,162,39,0.1);border:1px solid rgba(201,162,39,0.35);color:var(--gold-light);padding:8px 16px;border-radius:20px;font-size:13px;}
   .split{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;}
   @media(max-width:700px){.split{grid-template-columns:1fr;}nav ul{display:none;}}
   .split h3{color:var(--gold-light);font-size:20px;margin-bottom:12px;}
   .split p{color:var(--text-muted);font-size:14px;margin-bottom:10px;}
-  .prop-card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:10px;overflow:hidden;}
+  .prop-card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:10px;overflow:hidden;transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease;}
+  .prop-card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 8px 20px rgba(201,162,39,0.15);}
   .prop-photo{height:150px;background:linear-gradient(135deg,#1a2942,#101a2b);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;border-bottom:1px solid rgba(201,162,39,0.2);}
   .prop-body{padding:18px;}
   .prop-type{display:inline-block;font-size:11px;color:var(--gold-light);border:1px solid rgba(201,162,39,0.4);padding:3px 10px;border-radius:20px;margin-bottom:10px;}
   .prop-body h3{font-size:16px;margin-bottom:6px;}
   .prop-loc{color:var(--text-muted);font-size:13px;margin-bottom:10px;}
   .prop-price{color:var(--gold-light);font-weight:700;font-size:16px;}
+  .carousel{position:relative;background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:10px;overflow:hidden;max-width:420px;margin:0 auto;}
+  .carousel-track{display:flex;transition:transform .4s ease;}
+  .carousel-slide{min-width:100%;padding:36px 24px;text-align:center;}
+  .carousel-btn{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;padding:0;font-size:15px;background:var(--navy);border:1px solid rgba(201,162,39,0.4);color:var(--gold-light);cursor:pointer;}
+  .carousel-btn:hover{border-color:var(--gold);}
+  #prev-btn{left:10px;}
+  #next-btn{right:10px;}
+  .carousel-dots{display:flex;gap:6px;justify-content:center;margin-top:14px;}
+  .carousel-dots span{width:7px;height:7px;border-radius:50%;background:rgba(201,162,39,0.3);transition:background .2s ease;}
+  .carousel-dots span.active{background:var(--gold-light);}
   form{display:grid;gap:14px;max-width:520px;margin:0 auto;}
   form label{font-size:13px;color:var(--text-muted);display:block;margin-bottom:5px;}
   form input,form select,form textarea{width:100%;background:var(--navy-2);border:1px solid rgba(201,162,39,0.3);border-radius:6px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;}
@@ -94,6 +110,11 @@
     <span class="badge">Estudio jurídico</span>
     <span class="badge">Grupo inmobiliario</span>
   </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-num" data-target="8">0</div><div class="stat-label">Años de experiencia</div></div>
+    <div class="stat"><div class="stat-num" data-target="9">0</div><div class="stat-label">Servicios legales</div></div>
+    <div class="stat"><div class="stat-num" data-target="4">0</div><div class="stat-label">Propiedades activas</div></div>
+  </div>
 </div>
 
 <section id="juridico">
@@ -136,7 +157,12 @@
 <section id="propiedades">
   <h2>Propiedades destacadas</h2>
   <p class="section-sub">Catálogo de ejemplo — pronto con fotos y datos reales</p>
-  <div class="grid" id="prop-grid"></div>
+  <div class="carousel">
+    <div class="carousel-track" id="carousel-track"></div>
+    <button class="carousel-btn" id="prev-btn" aria-label="Anterior">&#8592;</button>
+    <button class="carousel-btn" id="next-btn" aria-label="Siguiente">&#8594;</button>
+  </div>
+  <div class="carousel-dots" id="carousel-dots"></div>
 </section>
 
 <section id="contacto">
@@ -194,11 +220,12 @@ const properties = [
   { type: "Venta", title: "Departamento 2 recámaras", loc: "Zona residencial", price: "$142,000" },
 ];
 
-const grid = document.getElementById("prop-grid");
-properties.forEach(p => {
-  const card = document.createElement("div");
-  card.className = "prop-card";
-  card.innerHTML = `
+const track = document.getElementById("carousel-track");
+const dotsWrap = document.getElementById("carousel-dots");
+properties.forEach((p, i) => {
+  const slide = document.createElement("div");
+  slide.className = "carousel-slide";
+  slide.innerHTML = `
     <div class="prop-photo">Foto próximamente</div>
     <div class="prop-body">
       <span class="prop-type">${p.type}</span>
@@ -206,8 +233,47 @@ properties.forEach(p => {
       <div class="prop-loc">${p.loc}</div>
       <div class="prop-price">${p.price}</div>
     </div>`;
-  grid.appendChild(card);
+  track.appendChild(slide);
+  const dot = document.createElement("span");
+  if (i === 0) dot.classList.add("active");
+  dotsWrap.appendChild(dot);
 });
+
+let currentSlide = 0;
+function updateCarousel(){
+  track.style.transform = `translateX(-${currentSlide * 100}%)`;
+  Array.from(dotsWrap.children).forEach((d, i) => d.classList.toggle("active", i === currentSlide));
+}
+document.getElementById("next-btn").addEventListener("click", () => {
+  currentSlide = (currentSlide + 1) % properties.length;
+  updateCarousel();
+});
+document.getElementById("prev-btn").addEventListener("click", () => {
+  currentSlide = (currentSlide - 1 + properties.length) % properties.length;
+  updateCarousel();
+});
+
+function animateCount(el, target, duration){
+  let start = null;
+  function step(ts){
+    if (!start) start = ts;
+    const progress = Math.min((ts - start) / duration, 1);
+    el.textContent = Math.floor(progress * target);
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = target;
+  }
+  requestAnimationFrame(step);
+}
+const statEls = document.querySelectorAll(".stat-num");
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      animateCount(entry.target, parseInt(entry.target.dataset.target, 10), 1200);
+      statsObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.5 });
+statEls.forEach(el => statsObserver.observe(el));
 
 document.getElementById("contact-form").addEventListener("submit", function(e){
   e.preventDefault();
