@@ -38,13 +38,28 @@
   .card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:10px;padding:24px;}
   .card h3{color:var(--gold-light);font-size:17px;margin-bottom:10px;}
   .card p{color:var(--text-muted);font-size:14px;}
+  .tags{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:30px;}
+  .tag{background:rgba(201,162,39,0.1);border:1px solid rgba(201,162,39,0.35);color:var(--gold-light);padding:8px 16px;border-radius:20px;font-size:13px;}
   .split{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;}
   @media(max-width:700px){.split{grid-template-columns:1fr;}nav ul{display:none;}}
   .split h3{color:var(--gold-light);font-size:20px;margin-bottom:12px;}
   .split p{color:var(--text-muted);font-size:14px;margin-bottom:10px;}
+  .prop-card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:10px;overflow:hidden;}
+  .prop-photo{height:150px;background:linear-gradient(135deg,#1a2942,#101a2b);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;border-bottom:1px solid rgba(201,162,39,0.2);}
+  .prop-body{padding:18px;}
+  .prop-type{display:inline-block;font-size:11px;color:var(--gold-light);border:1px solid rgba(201,162,39,0.4);padding:3px 10px;border-radius:20px;margin-bottom:10px;}
+  .prop-body h3{font-size:16px;margin-bottom:6px;}
+  .prop-loc{color:var(--text-muted);font-size:13px;margin-bottom:10px;}
+  .prop-price{color:var(--gold-light);font-weight:700;font-size:16px;}
+  form{display:grid;gap:14px;max-width:520px;margin:0 auto;}
+  form label{font-size:13px;color:var(--text-muted);display:block;margin-bottom:5px;}
+  form input,form select,form textarea{width:100%;background:var(--navy-2);border:1px solid rgba(201,162,39,0.3);border-radius:6px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;}
+  form textarea{resize:vertical;min-height:90px;}
+  form button{background:var(--gold);color:#0a1220;font-weight:700;border:none;padding:12px 26px;border-radius:6px;font-size:14px;cursor:pointer;justify-self:start;}
+  form button:hover{background:var(--gold-light);}
   footer{border-top:1px solid rgba(201,162,39,0.2);padding:40px 20px;text-align:center;color:var(--text-muted);font-size:13px;}
-  .social{display:flex;gap:18px;justify-content:center;margin:16px 0;}
-  .social a{border:1px solid rgba(201,162,39,0.4);width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--gold-light);}
+  .social{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:16px 0;}
+  .social a{border:1px solid rgba(201,162,39,0.4);padding:8px 16px;border-radius:20px;font-size:13px;color:var(--gold-light);}
   .wa-float{position:fixed;bottom:22px;right:22px;background:#25D366;color:#0a1220;width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 14px rgba(0,0,0,0.4);z-index:200;}
   .cta-btn{display:inline-block;background:var(--gold);color:#0a1220;font-weight:700;padding:12px 26px;border-radius:6px;font-size:14px;}
 </style>
@@ -64,7 +79,7 @@
       <ul>
         <li><a href="#juridico">Jurídico</a></li>
         <li><a href="#inmobiliario">Inmobiliario</a></li>
-        <li><a href="#nosotros">Nosotros</a></li>
+        <li><a href="#propiedades">Propiedades</a></li>
         <li><a href="#contacto">Contacto</a></li>
       </ul>
     </nav>
@@ -83,12 +98,22 @@
 
 <section id="juridico">
   <h2>Área jurídica</h2>
-  <p class="section-sub">Consulta inicial gratuita de 30 minutos</p>
+  <p class="section-sub">Soluciones legales claras y efectivas para proteger tus derechos — Dra. Yudith Sandoval, abogada</p>
   <div class="grid">
-    <div class="card"><h3>Derecho civil</h3><p>Contratos, obligaciones y disputas civiles con acompañamiento cercano en cada etapa.</p></div>
-    <div class="card"><h3>Derecho laboral</h3><p>Despidos injustificados, liquidaciones y demandas laborales.</p></div>
-    <div class="card"><h3>Derecho familiar</h3><p>Divorcios, custodia y pensión alimenticia, con trato humano y confidencial.</p></div>
-    <div class="card"><h3>Derecho inmobiliario</h3><p>Contratos de compraventa, escrituración y disputas de propiedad.</p></div>
+    <div class="card"><h3>Procesos de alimentos</h3><p>Demandas y trámites de pensión alimenticia.</p></div>
+    <div class="card"><h3>Rectificación de partida</h3><p>Corrección de datos en actas y partidas registrales.</p></div>
+    <div class="card"><h3>Tenencia</h3><p>Procesos de tenencia y custodia de menores.</p></div>
+    <div class="card"><h3>Sucesión intestada</h3><p>Trámite de herencias cuando no existe testamento.</p></div>
+    <div class="card"><h3>Prescripción adquisitiva</h3><p>Formalización de la propiedad por posesión.</p></div>
+    <div class="card"><h3>Saneamiento de predios</h3><p>Regularización legal de terrenos y propiedades.</p></div>
+    <div class="card"><h3>Daños a la propiedad</h3><p>Reclamos y procesos por afectación a tu propiedad.</p></div>
+    <div class="card"><h3>Elaboración de minutas</h3><p>Redacción de minutas para trámites legales.</p></div>
+    <div class="card"><h3>Elaboración de contratos</h3><p>Contratos a tu medida, revisados con respaldo legal.</p></div>
+  </div>
+  <div class="tags">
+    <span class="tag">Centro de conciliación</span>
+    <span class="tag">Cartas notariales</span>
+    <span class="tag">Actas de matrimonio</span>
   </div>
 </section>
 
@@ -98,7 +123,7 @@
       <h3>Grupo inmobiliario</h3>
       <p>Te acompañamos en todo el proceso de comprar, vender o rentar una propiedad, con respaldo legal incluido desde el primer momento.</p>
       <p>Valuación, promoción, negociación y cierre seguro de la operación.</p>
-      <a class="cta-btn" href="#contacto">Quiero más información</a>
+      <a class="cta-btn" href="#propiedades">Ver propiedades</a>
     </div>
     <div class="grid">
       <div class="card"><h3>Comprar</h3><p>Casas, departamentos y terrenos con opciones a tu medida.</p></div>
@@ -108,22 +133,91 @@
   </div>
 </section>
 
-<section id="nosotros">
-  <h2>Nosotros</h2>
-  <p class="section-sub">J&amp;S combina experiencia legal con conocimiento del mercado inmobiliario para ofrecerte soluciones completas, no solo asesoría por separado.</p>
+<section id="propiedades">
+  <h2>Propiedades destacadas</h2>
+  <p class="section-sub">Catálogo de ejemplo — pronto con fotos y datos reales</p>
+  <div class="grid" id="prop-grid"></div>
 </section>
 
-<footer id="contacto">
+<section id="contacto">
+  <h2>Contacto</h2>
+  <p class="section-sub">Escríbenos y te respondemos por WhatsApp</p>
+  <form id="contact-form">
+    <div>
+      <label for="nombre">Nombre</label>
+      <input type="text" id="nombre" required>
+    </div>
+    <div>
+      <label for="telefono">Teléfono</label>
+      <input type="tel" id="telefono" required>
+    </div>
+    <div>
+      <label for="motivo">Motivo de tu consulta</label>
+      <select id="motivo">
+        <option>Asesoría jurídica</option>
+        <option>Comprar una propiedad</option>
+        <option>Vender una propiedad</option>
+        <option>Rentar una propiedad</option>
+        <option>Otro</option>
+      </select>
+    </div>
+    <div>
+      <label for="mensaje">Cuéntanos brevemente tu caso</label>
+      <textarea id="mensaje" required></textarea>
+    </div>
+    <button type="submit">Enviar por WhatsApp</button>
+  </form>
+</section>
+
+<footer>
   <div class="brand-text">J&amp;S</div>
-  <p>Lunes a viernes, 9:00 a.m. a 6:00 p.m.</p>
+  <p>Jr. Bolognesi N°533, Supe pueblo, Barranca (frente a la Plaza de Armas)</p>
+  <p>WhatsApp: 956 771 681 · Tel: 993 793 224 · Ejuridicojys@gmail.com</p>
   <div class="social">
-    <a href="https://www.facebook.com/grupoinmobiliariojys" aria-label="Facebook">f</a>
-    <a href="https://www.instagram.com/JSGrupoInmobiliario" aria-label="Instagram">ig</a>
+    <a href="https://www.instagram.com/estudio.juridico.jys" aria-label="Instagram jurídico">ig·legal</a>
+    <a href="https://www.instagram.com/grupoinmobiliariojys" aria-label="Instagram inmobiliario">ig·inmob</a>
+    <a href="https://www.facebook.com/grupoinmobiliariojys" aria-label="Facebook">facebook</a>
   </div>
   <p>&copy; 2026 J&amp;S Estudio Jurídico y Grupo Inmobiliario</p>
 </footer>
 
-<a class="wa-float" href="https://wa.me/000000000000?text=Hola%2C%20quiero%20información" aria-label="Chatea por WhatsApp" title="Chatea por WhatsApp">💬</a>
+<a class="wa-float" href="https://wa.me/51956771681?text=Hola%2C%20quiero%20información" aria-label="Chatea por WhatsApp" title="Chatea por WhatsApp">💬</a>
+
+<script>
+const WHATSAPP_NUMBER = "51956771681";
+
+const properties = [
+  { type: "Venta", title: "Casa en Las Palmas", loc: "Zona norte", price: "$185,000" },
+  { type: "Renta", title: "Departamento céntrico", loc: "Centro histórico", price: "$9,500/mes" },
+  { type: "Venta", title: "Terreno residencial", loc: "Fraccionamiento Los Robles", price: "$62,000" },
+  { type: "Venta", title: "Departamento 2 recámaras", loc: "Zona residencial", price: "$142,000" },
+];
+
+const grid = document.getElementById("prop-grid");
+properties.forEach(p => {
+  const card = document.createElement("div");
+  card.className = "prop-card";
+  card.innerHTML = `
+    <div class="prop-photo">Foto próximamente</div>
+    <div class="prop-body">
+      <span class="prop-type">${p.type}</span>
+      <h3>${p.title}</h3>
+      <div class="prop-loc">${p.loc}</div>
+      <div class="prop-price">${p.price}</div>
+    </div>`;
+  grid.appendChild(card);
+});
+
+document.getElementById("contact-form").addEventListener("submit", function(e){
+  e.preventDefault();
+  const nombre = document.getElementById("nombre").value;
+  const telefono = document.getElementById("telefono").value;
+  const motivo = document.getElementById("motivo").value;
+  const mensaje = document.getElementById("mensaje").value;
+  const texto = `Hola, soy ${nombre} (tel. ${telefono}).\nMotivo: ${motivo}\nMensaje: ${mensaje}`;
+  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(texto)}`, "_blank");
+});
+</script>
 
 </body>
 </html>
