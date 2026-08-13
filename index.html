@@ -67,13 +67,16 @@
   .carousel-dots{display:flex;gap:6px;justify-content:center;margin-top:14px;}
   .carousel-dots span{width:7px;height:7px;border-radius:50%;background:rgba(201,162,39,0.3);transition:background .2s ease;}
   .carousel-dots span.active{background:var(--gold-light);}
-  .promo{display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:10px;}
-  .promo-bubble{position:relative;max-width:520px;background:var(--navy-2);border:1px solid rgba(201,162,39,0.4);border-radius:16px;padding:22px 30px;font-weight:700;font-size:21px;line-height:1.4;}
+  .contact-split{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;}
+  @media(max-width:750px){.contact-split{grid-template-columns:1fr;}}
+  .contact-promo{display:flex;flex-direction:column;align-items:center;text-align:center;}
+  .contact-form-card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.3);border-radius:16px;padding:32px;}
+  .contact-form-card form{max-width:none;margin:0;}
+  .promo-bubble{position:relative;max-width:420px;background:var(--navy);border:1px solid rgba(201,162,39,0.4);border-radius:16px;padding:22px 28px;font-weight:700;font-size:20px;line-height:1.4;}
   .promo-bubble .highlight{color:var(--gold-light);}
-  .promo-bubble::after{content:"";position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);border-width:14px 14px 0 14px;border-style:solid;border-color:var(--navy-2) transparent transparent transparent;}
-  .promo-photo-wrap{margin-top:30px;width:100%;max-width:380px;border-radius:12px;overflow:hidden;background:#f1efe8;}
+  .promo-bubble::after{content:"";position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);border-width:14px 14px 0 14px;border-style:solid;border-color:var(--navy) transparent transparent transparent;}
+  .promo-photo-wrap{margin-top:30px;width:100%;max-width:340px;border-radius:12px;overflow:hidden;background:#f1efe8;}
   .promo-photo-wrap img{width:100%;height:auto;display:block;}
-  .promo-placeholder{margin-top:26px;width:260px;height:260px;border:1px dashed rgba(201,162,39,0.4);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;padding:16px;text-align:center;}
   .feature{display:inline-flex;align-items:center;gap:6px;}
   .feature svg{width:14px;height:14px;flex-shrink:0;}
   .loc-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
@@ -145,13 +148,6 @@
   </div>
 </div>
 
-<section id="promo" style="padding-top:10px;padding-bottom:10px;">
-  <div class="promo">
-    <div class="promo-bubble">¡Estás a un paso de tener <span class="highlight">el terreno para tu familia!</span></div>
-    <div class="promo-photo-wrap"><img src="asesor.jpg" alt="Asesor J&S"></div>
-  </div>
-</section>
-
 <section id="juridico">
   <h2>Área jurídica</h2>
   <p class="section-sub">Soluciones legales claras y efectivas para proteger tus derechos — Dra. Yudith Sandoval, abogada</p>
@@ -206,30 +202,38 @@
 <section id="contacto">
   <h2>Contáctanos</h2>
   <p class="section-sub">Escríbenos y te respondemos por WhatsApp</p>
-  <form id="contact-form">
-    <div>
-      <label for="nombre">Nombre</label>
-      <input type="text" id="nombre" required>
+  <div class="contact-split">
+    <div class="contact-promo">
+      <div class="promo-bubble">¡Estás a un paso de tener <span class="highlight">el terreno para tu familia!</span></div>
+      <div class="promo-photo-wrap"><img src="asesor.jpg" alt="Asesor J&S"></div>
     </div>
-    <div>
-      <label for="telefono">Teléfono</label>
-      <input type="tel" id="telefono" required>
+    <div class="contact-form-card">
+      <form id="contact-form">
+        <div>
+          <label for="nombre">Nombre</label>
+          <input type="text" id="nombre" required>
+        </div>
+        <div>
+          <label for="telefono">Teléfono</label>
+          <input type="tel" id="telefono" required>
+        </div>
+        <div>
+          <label for="motivo">Motivo de tu consulta</label>
+          <select id="motivo">
+            <option>Asesoría jurídica</option>
+            <option>Comprar un lote</option>
+            <option>Vender un terreno</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div>
+          <label for="mensaje">Cuéntanos brevemente tu caso</label>
+          <textarea id="mensaje" required></textarea>
+        </div>
+        <button type="submit">Enviar por WhatsApp</button>
+      </form>
     </div>
-    <div>
-      <label for="motivo">Motivo de tu consulta</label>
-      <select id="motivo">
-        <option>Asesoría jurídica</option>
-        <option>Comprar un lote</option>
-        <option>Vender un terreno</option>
-        <option>Otro</option>
-      </select>
-    </div>
-    <div>
-      <label for="mensaje">Cuéntanos brevemente tu caso</label>
-      <textarea id="mensaje" required></textarea>
-    </div>
-    <button type="submit">Enviar por WhatsApp</button>
-  </form>
+  </div>
 </section>
 
 <footer>
