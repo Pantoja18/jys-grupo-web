@@ -67,6 +67,22 @@
   .carousel-dots{display:flex;gap:6px;justify-content:center;margin-top:14px;}
   .carousel-dots span{width:7px;height:7px;border-radius:50%;background:rgba(201,162,39,0.3);transition:background .2s ease;}
   .carousel-dots span.active{background:var(--gold-light);}
+  .proj-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;}
+  .proj-card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:12px;overflow:hidden;transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease;}
+  .proj-card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 8px 20px rgba(201,162,39,0.15);}
+  .proj-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;}
+  .proj-photo{aspect-ratio:1;background:linear-gradient(135deg,#1a2942,#101a2b);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;text-align:center;padding:6px;}
+  .proj-body{padding:22px;}
+  .proj-body h3{font-size:19px;color:var(--gold-light);margin-bottom:6px;}
+  .proj-loc{color:var(--text-muted);font-size:13px;margin-bottom:14px;}
+  .proj-features{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;}
+  .feature{font-size:12px;background:rgba(201,162,39,0.1);border:1px solid rgba(201,162,39,0.3);color:var(--gold-light);padding:5px 12px;border-radius:16px;}
+  .location-block{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:center;}
+  @media(max-width:700px){.location-block{grid-template-columns:1fr;}}
+  .map-frame{border-radius:10px;overflow:hidden;border:1px solid rgba(201,162,39,0.2);height:260px;}
+  .map-frame iframe{width:100%;height:100%;border:0;filter:grayscale(0.3) invert(0.92) contrast(0.9);}
+  .hours-list{list-style:none;font-size:14px;color:var(--text-muted);}
+  .hours-list li{padding:6px 0;border-bottom:1px solid rgba(201,162,39,0.15);display:flex;justify-content:space-between;}
   form{display:grid;gap:14px;max-width:520px;margin:0 auto;}
   form label{font-size:13px;color:var(--text-muted);display:block;margin-bottom:5px;}
   form input,form select,form textarea{width:100%;background:var(--navy-2);border:1px solid rgba(201,162,39,0.3);border-radius:6px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;}
@@ -94,9 +110,9 @@
     <nav>
       <ul>
         <li><a href="#juridico">Jurídico</a></li>
-        <li><a href="#inmobiliario">Inmobiliario</a></li>
-        <li><a href="#propiedades">Propiedades</a></li>
-        <li><a href="#contacto">Contacto</a></li>
+        <li><a href="#proyectos">Proyectos</a></li>
+        <li><a href="#nosotros">Nosotros</a></li>
+        <li><a href="#contacto">Contáctanos</a></li>
       </ul>
     </nav>
   </div>
@@ -138,35 +154,34 @@
   </div>
 </section>
 
-<section id="inmobiliario">
-  <div class="split">
-    <div>
-      <h3>Grupo inmobiliario</h3>
-      <p>Te acompañamos en todo el proceso de comprar, vender o rentar una propiedad, con respaldo legal incluido desde el primer momento.</p>
-      <p>Valuación, promoción, negociación y cierre seguro de la operación.</p>
-      <a class="cta-btn" href="#propiedades">Ver propiedades</a>
-    </div>
-    <div class="grid">
-      <div class="card"><h3>Comprar</h3><p>Casas, departamentos y terrenos con opciones a tu medida.</p></div>
-      <div class="card"><h3>Vender</h3><p>Valuación real y promoción efectiva de tu propiedad.</p></div>
-      <div class="card"><h3>Rentar</h3><p>Encuentra o publica una propiedad en renta con contrato seguro.</p></div>
-    </div>
-  </div>
+<section id="proyectos">
+  <h2>Proyectos de lotes</h2>
+  <p class="section-sub">Terrenos con título de propiedad, listos para que construyas tu futuro — catálogo de ejemplo, pronto con fotos reales</p>
+  <div class="proj-grid" id="proj-grid"></div>
 </section>
 
-<section id="propiedades">
-  <h2>Propiedades destacadas</h2>
-  <p class="section-sub">Catálogo de ejemplo — pronto con fotos y datos reales</p>
-  <div class="carousel">
-    <div class="carousel-track" id="carousel-track"></div>
-    <button class="carousel-btn" id="prev-btn" aria-label="Anterior">&#8592;</button>
-    <button class="carousel-btn" id="next-btn" aria-label="Siguiente">&#8594;</button>
+<section id="nosotros">
+  <h2>Nosotros</h2>
+  <p class="section-sub">J&amp;S combina la experiencia legal de la Dra. Yudith Sandoval con el conocimiento del mercado de terrenos en Barranca y Supe, para ofrecerte un proceso de compra respaldado de principio a fin: desde elegir el lote hasta dejar tu título de propiedad en regla.</p>
+</section>
+
+<section id="ubicacion">
+  <h2>Visítanos en nuestra oficina</h2>
+  <div class="location-block">
+    <div class="map-frame">
+      <iframe src="https://maps.google.com/maps?q=Jr.%20Bolognesi%20533%2C%20Supe%2C%20Barranca%2C%20Peru&output=embed" title="Ubicación de J&S" loading="lazy"></iframe>
+    </div>
+    <div>
+      <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px;">Jr. Bolognesi N°533, Supe pueblo, Barranca (frente a la Plaza de Armas)</p>
+      <ul class="hours-list">
+        <li><span>Lunes a viernes</span><span>9:00 am – 6:00 pm</span></li>
+      </ul>
+    </div>
   </div>
-  <div class="carousel-dots" id="carousel-dots"></div>
 </section>
 
 <section id="contacto">
-  <h2>Contacto</h2>
+  <h2>Contáctanos</h2>
   <p class="section-sub">Escríbenos y te respondemos por WhatsApp</p>
   <form id="contact-form">
     <div>
@@ -181,9 +196,8 @@
       <label for="motivo">Motivo de tu consulta</label>
       <select id="motivo">
         <option>Asesoría jurídica</option>
-        <option>Comprar una propiedad</option>
-        <option>Vender una propiedad</option>
-        <option>Rentar una propiedad</option>
+        <option>Comprar un lote</option>
+        <option>Vender un terreno</option>
         <option>Otro</option>
       </select>
     </div>
@@ -213,44 +227,36 @@
 <script>
 const WHATSAPP_NUMBER = "51956771681";
 
-const properties = [
-  { type: "Venta", title: "Casa en Las Palmas", loc: "Zona norte", price: "$185,000" },
-  { type: "Renta", title: "Departamento céntrico", loc: "Centro histórico", price: "$9,500/mes" },
-  { type: "Venta", title: "Terreno residencial", loc: "Fraccionamiento Los Robles", price: "$62,000" },
-  { type: "Venta", title: "Departamento 2 recámaras", loc: "Zona residencial", price: "$142,000" },
+const proyectos = [
+  {
+    nombre: "Villa Supe",
+    ubicacion: "Supe, Barranca",
+    features: ["Pórtico de ingreso", "Título de propiedad", "Agua y desagüe"],
+    fotos: 3
+  },
+  {
+    nombre: "Finca La Alborada",
+    ubicacion: "Barranca",
+    features: ["Pórtico de ingreso", "Título de propiedad", "Agua y desagüe"],
+    fotos: 3
+  }
 ];
 
-const track = document.getElementById("carousel-track");
-const dotsWrap = document.getElementById("carousel-dots");
-properties.forEach((p, i) => {
-  const slide = document.createElement("div");
-  slide.className = "carousel-slide";
-  slide.innerHTML = `
-    <div class="prop-photo">Foto próximamente</div>
-    <div class="prop-body">
-      <span class="prop-type">${p.type}</span>
-      <h3>${p.title}</h3>
-      <div class="prop-loc">${p.loc}</div>
-      <div class="prop-price">${p.price}</div>
+const projGrid = document.getElementById("proj-grid");
+proyectos.forEach(p => {
+  const card = document.createElement("div");
+  card.className = "proj-card";
+  const fotosHtml = Array.from({ length: p.fotos }).map((_, i) => `<div class="proj-photo">Foto ${i + 1}<br>próximamente</div>`).join("");
+  const featuresHtml = p.features.map(f => `<span class="feature">${f}</span>`).join("");
+  card.innerHTML = `
+    <div class="proj-gallery">${fotosHtml}</div>
+    <div class="proj-body">
+      <h3>${p.nombre}</h3>
+      <div class="proj-loc">${p.ubicacion}</div>
+      <div class="proj-features">${featuresHtml}</div>
+      <a class="cta-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hola, quiero información sobre lotes en " + p.nombre)}" target="_blank">Quiero información</a>
     </div>`;
-  track.appendChild(slide);
-  const dot = document.createElement("span");
-  if (i === 0) dot.classList.add("active");
-  dotsWrap.appendChild(dot);
-});
-
-let currentSlide = 0;
-function updateCarousel(){
-  track.style.transform = `translateX(-${currentSlide * 100}%)`;
-  Array.from(dotsWrap.children).forEach((d, i) => d.classList.toggle("active", i === currentSlide));
-}
-document.getElementById("next-btn").addEventListener("click", () => {
-  currentSlide = (currentSlide + 1) % properties.length;
-  updateCarousel();
-});
-document.getElementById("prev-btn").addEventListener("click", () => {
-  currentSlide = (currentSlide - 1 + properties.length) % properties.length;
-  updateCarousel();
+  projGrid.appendChild(card);
 });
 
 function animateCount(el, target, duration){
