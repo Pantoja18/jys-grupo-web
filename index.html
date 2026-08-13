@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J&amp;S | Estudio Jurídico y Grupo Inmobiliario</title>
+<style>
+  :root{
+    --navy:#0e1a2b;
+    --navy-2:#152238;
+    --gold:#c9a227;
+    --gold-light:#e6c65c;
+    --text:#eaeaea;
+    --text-muted:#a9b2c0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#0a1220;color:var(--text);line-height:1.6;}
+  a{color:inherit;text-decoration:none;}
+  header{position:sticky;top:0;background:rgba(10,18,32,0.95);backdrop-filter:blur(6px);z-index:100;border-bottom:1px solid rgba(201,162,39,0.25);}
+  .nav{max-width:1100px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 20px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand img{height:40px;}
+  .brand-text{font-weight:700;font-size:18px;letter-spacing:1px;}
+  .brand-sub{font-size:10px;color:var(--gold);letter-spacing:1px;}
+  nav ul{list-style:none;display:flex;gap:24px;}
+  nav a{font-size:14px;color:var(--text-muted);}
+  nav a:hover{color:var(--gold-light);}
+  .hero{max-width:1100px;margin:0 auto;padding:90px 20px;text-align:center;}
+  .hero img{height:100px;margin-bottom:20px;}
+  .hero h1{font-size:34px;font-weight:700;margin-bottom:14px;}
+  .hero p{color:var(--text-muted);max-width:560px;margin:0 auto 28px;}
+  .badges{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+  .badge{border:1px solid var(--gold);color:var(--gold-light);padding:8px 18px;border-radius:30px;font-size:13px;}
+  section{max-width:1100px;margin:0 auto;padding:70px 20px;}
+  h2{font-size:26px;text-align:center;margin-bottom:8px;}
+  .section-sub{text-align:center;color:var(--text-muted);margin-bottom:40px;font-size:14px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:20px;}
+  .card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:10px;padding:24px;}
+  .card h3{color:var(--gold-light);font-size:17px;margin-bottom:10px;}
+  .card p{color:var(--text-muted);font-size:14px;}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;}
+  @media(max-width:700px){.split{grid-template-columns:1fr;}nav ul{display:none;}}
+  .split h3{color:var(--gold-light);font-size:20px;margin-bottom:12px;}
+  .split p{color:var(--text-muted);font-size:14px;margin-bottom:10px;}
+  footer{border-top:1px solid rgba(201,162,39,0.2);padding:40px 20px;text-align:center;color:var(--text-muted);font-size:13px;}
+  .social{display:flex;gap:18px;justify-content:center;margin:16px 0;}
+  .social a{border:1px solid rgba(201,162,39,0.4);width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--gold-light);}
+  .wa-float{position:fixed;bottom:22px;right:22px;background:#25D366;color:#0a1220;width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 14px rgba(0,0,0,0.4);z-index:200;}
+  .cta-btn{display:inline-block;background:var(--gold);color:#0a1220;font-weight:700;padding:12px 26px;border-radius:6px;font-size:14px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="nav">
+    <div class="brand">
+      <img src="logo.png" alt="J&S">
+      <div>
+        <div class="brand-text">J&amp;S</div>
+        <div class="brand-sub">ESTUDIO JURÍDICO Y GRUPO INMOBILIARIO</div>
+      </div>
+    </div>
+    <nav>
+      <ul>
+        <li><a href="#juridico">Jurídico</a></li>
+        <li><a href="#inmobiliario">Inmobiliario</a></li>
+        <li><a href="#nosotros">Nosotros</a></li>
+        <li><a href="#contacto">Contacto</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<div class="hero">
+  <img src="logo.png" alt="J&S Grupo Inmobiliario">
+  <h1>Asesoría legal e inmobiliaria bajo un mismo techo</h1>
+  <p>Dos líneas de servicio, un mismo respaldo: acompañamiento jurídico y soluciones inmobiliarias para tu tranquilidad.</p>
+  <div class="badges">
+    <span class="badge">Estudio jurídico</span>
+    <span class="badge">Grupo inmobiliario</span>
+  </div>
+</div>
+
+<section id="juridico">
+  <h2>Área jurídica</h2>
+  <p class="section-sub">Consulta inicial gratuita de 30 minutos</p>
+  <div class="grid">
+    <div class="card"><h3>Derecho civil</h3><p>Contratos, obligaciones y disputas civiles con acompañamiento cercano en cada etapa.</p></div>
+    <div class="card"><h3>Derecho laboral</h3><p>Despidos injustificados, liquidaciones y demandas laborales.</p></div>
+    <div class="card"><h3>Derecho familiar</h3><p>Divorcios, custodia y pensión alimenticia, con trato humano y confidencial.</p></div>
+    <div class="card"><h3>Derecho inmobiliario</h3><p>Contratos de compraventa, escrituración y disputas de propiedad.</p></div>
+  </div>
+</section>
+
+<section id="inmobiliario">
+  <div class="split">
+    <div>
+      <h3>Grupo inmobiliario</h3>
+      <p>Te acompañamos en todo el proceso de comprar, vender o rentar una propiedad, con respaldo legal incluido desde el primer momento.</p>
+      <p>Valuación, promoción, negociación y cierre seguro de la operación.</p>
+      <a class="cta-btn" href="#contacto">Quiero más información</a>
+    </div>
+    <div class="grid">
+      <div class="card"><h3>Comprar</h3><p>Casas, departamentos y terrenos con opciones a tu medida.</p></div>
+      <div class="card"><h3>Vender</h3><p>Valuación real y promoción efectiva de tu propiedad.</p></div>
+      <div class="card"><h3>Rentar</h3><p>Encuentra o publica una propiedad en renta con contrato seguro.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="nosotros">
+  <h2>Nosotros</h2>
+  <p class="section-sub">J&amp;S combina experiencia legal con conocimiento del mercado inmobiliario para ofrecerte soluciones completas, no solo asesoría por separado.</p>
+</section>
+
+<footer id="contacto">
+  <div class="brand-text">J&amp;S</div>
+  <p>Lunes a viernes, 9:00 a.m. a 6:00 p.m.</p>
+  <div class="social">
+    <a href="https://www.facebook.com/grupoinmobiliariojys" aria-label="Facebook">f</a>
+    <a href="https://www.instagram.com/JSGrupoInmobiliario" aria-label="Instagram">ig</a>
+  </div>
+  <p>&copy; 2026 J&amp;S Estudio Jurídico y Grupo Inmobiliario</p>
+</footer>
+
+<a class="wa-float" href="https://wa.me/000000000000?text=Hola%2C%20quiero%20información" aria-label="Chatea por WhatsApp" title="Chatea por WhatsApp">💬</a>
+
+</body>
+</html>
