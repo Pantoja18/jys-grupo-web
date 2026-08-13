@@ -71,8 +71,8 @@
   .promo-bubble{position:relative;max-width:520px;background:var(--navy-2);border:1px solid rgba(201,162,39,0.4);border-radius:16px;padding:22px 30px;font-weight:700;font-size:21px;line-height:1.4;}
   .promo-bubble .highlight{color:var(--gold-light);}
   .promo-bubble::after{content:"";position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);border-width:14px 14px 0 14px;border-style:solid;border-color:var(--navy-2) transparent transparent transparent;}
-  .promo-photo-wrap{margin-top:26px;width:260px;height:260px;}
-  .promo-photo-wrap img{width:100%;height:100%;object-fit:contain;}
+  .promo-photo-wrap{margin-top:30px;width:100%;max-width:380px;border-radius:12px;overflow:hidden;background:#f1efe8;}
+  .promo-photo-wrap img{width:100%;height:auto;display:block;}
   .promo-placeholder{margin-top:26px;width:260px;height:260px;border:1px dashed rgba(201,162,39,0.4);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;padding:16px;text-align:center;}
   .feature{display:inline-flex;align-items:center;gap:6px;}
   .feature svg{width:14px;height:14px;flex-shrink:0;}
@@ -83,7 +83,7 @@
   .proj-card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:12px;overflow:hidden;transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease;}
   .proj-card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 8px 20px rgba(201,162,39,0.15);}
   .proj-gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;}
-  .proj-photo{aspect-ratio:1;background:linear-gradient(135deg,#1a2942,#101a2b);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:11px;text-align:center;padding:6px;}
+  .proj-photo{aspect-ratio:1;width:100%;object-fit:cover;display:block;}
   .proj-body{padding:22px;}
   .proj-body h3{font-size:19px;color:var(--gold-light);margin-bottom:6px;}
   .proj-loc{color:var(--text-muted);font-size:13px;margin-bottom:14px;}
@@ -141,15 +141,14 @@
   <div class="stats">
     <div class="stat"><div class="stat-num" data-target="8">0</div><div class="stat-label">Años de experiencia</div></div>
     <div class="stat"><div class="stat-num" data-target="9">0</div><div class="stat-label">Servicios legales</div></div>
-    <div class="stat"><div class="stat-num" data-target="4">0</div><div class="stat-label">Propiedades activas</div></div>
+    <div class="stat"><div class="stat-num" data-target="2">0</div><div class="stat-label">Proyectos activos</div></div>
   </div>
 </div>
 
 <section id="promo" style="padding-top:10px;padding-bottom:10px;">
   <div class="promo">
     <div class="promo-bubble">¡Estás a un paso de tener <span class="highlight">el terreno para tu familia!</span></div>
-    <!-- Cuando tengas la foto, reemplaza este div por: <div class="promo-photo-wrap"><img src="equipo.png" alt="Equipo J&S"></div> -->
-    <div class="promo-placeholder">Foto del equipo J&amp;S<br>(pendiente de subir)</div>
+    <div class="promo-photo-wrap"><img src="asesor.jpg" alt="Asesor J&S"></div>
   </div>
 </section>
 
@@ -176,7 +175,7 @@
 
 <section id="proyectos">
   <h2>Proyectos de lotes</h2>
-  <p class="section-sub">Terrenos con título de propiedad, listos para que construyas tu futuro — catálogo de ejemplo, pronto con fotos reales</p>
+  <p class="section-sub">Terrenos con título de propiedad, listos para que construyas tu futuro</p>
   <div class="proj-grid" id="proj-grid"></div>
 </section>
 
@@ -236,7 +235,8 @@
 <footer>
   <div class="brand-text">J&amp;S</div>
   <p>Jr. Bolognesi N°533, Supe pueblo, Barranca (frente a la Plaza de Armas)</p>
-  <p>WhatsApp: 956 771 681 · Tel: 993 793 224 · Ejuridicojys@gmail.com</p>
+  <p>Jurídico: WhatsApp 956 771 681 · Tel 993 793 224 · Ejuridicojys@gmail.com</p>
+  <p>Inmobiliario: WhatsApp 995 149 635 / 956 764 364</p>
   <div class="social">
     <a href="https://www.instagram.com/estudio.juridico.jys" aria-label="Instagram jurídico">ig·legal</a>
     <a href="https://www.instagram.com/grupoinmobiliariojys" aria-label="Instagram inmobiliario">ig·inmob</a>
@@ -250,11 +250,14 @@
 
 <script>
 const WHATSAPP_NUMBER = "51956771681";
+const REALESTATE_WHATSAPP = "51995149635";
 
 const FEATURE_ICONS = {
-  "pórtico": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V7l8-4 8 4v14"/><path d="M4 21h16"/><path d="M9 21V12h6v9"/></svg>',
-  "título": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>',
-  "agua": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s6 7 6 12a6 6 0 0 1-12 0c0-5 6-12 6-12z"/></svg>'
+  "sunarp": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>',
+  "m²": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg>',
+  "inicial": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>',
+  "pago": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>',
+  "frontera": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V7l8-4 8 4v14"/><path d="M4 21h16"/><path d="M9 21V12h6v9"/></svg>'
 };
 function featureIcon(text){
   const key = Object.keys(FEATURE_ICONS).find(k => text.toLowerCase().includes(k));
@@ -263,16 +266,16 @@ function featureIcon(text){
 
 const proyectos = [
   {
-    nombre: "Villa Supe",
-    ubicacion: "Supe, Barranca",
-    features: ["Pórtico de ingreso", "Título de propiedad", "Agua y desagüe"],
-    fotos: 3
+    nombre: "Finca Alborada",
+    ubicacion: "Supe — Panamericana Norte, camino a Caral (km 184+240)",
+    features: ["Lotes desde 498 m²", "Inicial desde S/15,000", "16 m de frontera", "Inscrito en SUNARP", "Facilidades de pago"],
+    fotos: ["finca-alborada-1.jpg", "finca-alborada-2.jpg", "finca-alborada-3.jpg"]
   },
   {
-    nombre: "Finca La Alborada",
-    ubicacion: "Barranca",
-    features: ["Pórtico de ingreso", "Título de propiedad", "Agua y desagüe"],
-    fotos: 3
+    nombre: "Mirador de Cascajal en Caral",
+    ubicacion: "Caral, Supe (Calle Bolognesi de Caral)",
+    features: ["Áreas de 120 m²", "Desde S/28,000", "Inscrito en SUNARP"],
+    fotos: ["mirador-cascajal-1.jpg", "mirador-cascajal-2.jpg", "mirador-cascajal-3.jpg"]
   }
 ];
 
@@ -280,7 +283,7 @@ const projGrid = document.getElementById("proj-grid");
 proyectos.forEach(p => {
   const card = document.createElement("div");
   card.className = "proj-card";
-  const fotosHtml = Array.from({ length: p.fotos }).map((_, i) => `<div class="proj-photo">Foto ${i + 1}<br>próximamente</div>`).join("");
+  const fotosHtml = p.fotos.map((src, i) => `<img class="proj-photo" src="${src}" alt="${p.nombre} foto ${i + 1}">`).join("");
   const featuresHtml = p.features.map(f => `<span class="feature">${featureIcon(f)}${f}</span>`).join("");
   card.innerHTML = `
     <div class="proj-gallery">${fotosHtml}</div>
@@ -288,7 +291,7 @@ proyectos.forEach(p => {
       <h3>${p.nombre}</h3>
       <div class="proj-loc">${p.ubicacion}</div>
       <div class="proj-features">${featuresHtml}</div>
-      <a class="cta-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Hola, quiero información sobre lotes en " + p.nombre)}" target="_blank">Quiero información</a>
+      <a class="cta-btn" href="https://wa.me/${REALESTATE_WHATSAPP}?text=${encodeURIComponent("Hola, quiero información sobre lotes en " + p.nombre)}" target="_blank">Quiero información</a>
     </div>`;
   projGrid.appendChild(card);
 });
