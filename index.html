@@ -67,6 +67,18 @@
   .carousel-dots{display:flex;gap:6px;justify-content:center;margin-top:14px;}
   .carousel-dots span{width:7px;height:7px;border-radius:50%;background:rgba(201,162,39,0.3);transition:background .2s ease;}
   .carousel-dots span.active{background:var(--gold-light);}
+  .promo{display:flex;flex-direction:column;align-items:center;text-align:center;padding-top:10px;}
+  .promo-bubble{position:relative;max-width:520px;background:var(--navy-2);border:1px solid rgba(201,162,39,0.4);border-radius:16px;padding:22px 30px;font-weight:700;font-size:21px;line-height:1.4;}
+  .promo-bubble .highlight{color:var(--gold-light);}
+  .promo-bubble::after{content:"";position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);border-width:14px 14px 0 14px;border-style:solid;border-color:var(--navy-2) transparent transparent transparent;}
+  .promo-photo-wrap{margin-top:26px;width:260px;height:260px;}
+  .promo-photo-wrap img{width:100%;height:100%;object-fit:contain;}
+  .promo-placeholder{margin-top:26px;width:260px;height:260px;border:1px dashed rgba(201,162,39,0.4);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:13px;padding:16px;text-align:center;}
+  .feature{display:inline-flex;align-items:center;gap:6px;}
+  .feature svg{width:14px;height:14px;flex-shrink:0;}
+  .loc-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
+  .loc-btn{display:inline-flex;align-items:center;gap:6px;font-size:13px;border:1px solid rgba(201,162,39,0.4);color:var(--gold-light);padding:8px 16px;border-radius:20px;}
+  .loc-btn:hover{border-color:var(--gold);}
   .proj-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;}
   .proj-card{background:var(--navy-2);border:1px solid rgba(201,162,39,0.2);border-radius:12px;overflow:hidden;transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease;}
   .proj-card:hover{transform:translateY(-4px);border-color:var(--gold);box-shadow:0 8px 20px rgba(201,162,39,0.15);}
@@ -133,6 +145,14 @@
   </div>
 </div>
 
+<section id="promo" style="padding-top:10px;padding-bottom:10px;">
+  <div class="promo">
+    <div class="promo-bubble">¡Estás a un paso de tener <span class="highlight">el terreno para tu familia!</span></div>
+    <!-- Cuando tengas la foto, reemplaza este div por: <div class="promo-photo-wrap"><img src="equipo.png" alt="Equipo J&S"></div> -->
+    <div class="promo-placeholder">Foto del equipo J&amp;S<br>(pendiente de subir)</div>
+  </div>
+</section>
+
 <section id="juridico">
   <h2>Área jurídica</h2>
   <p class="section-sub">Soluciones legales claras y efectivas para proteger tus derechos — Dra. Yudith Sandoval, abogada</p>
@@ -176,6 +196,10 @@
       <ul class="hours-list">
         <li><span>Lunes a viernes</span><span>9:00 am – 6:00 pm</span></li>
       </ul>
+      <div class="loc-actions">
+        <a class="loc-btn" href="https://waze.com/ul?q=Jr.%20Bolognesi%20533%2C%20Supe%2C%20Barranca%2C%20Peru&navigate=yes" target="_blank">Cómo llegar (Waze)</a>
+        <a class="loc-btn" href="https://www.google.com/maps/search/?api=1&query=Jr.+Bolognesi+533+Supe+Barranca+Peru" target="_blank">Google Maps</a>
+      </div>
     </div>
   </div>
 </section>
@@ -227,6 +251,16 @@
 <script>
 const WHATSAPP_NUMBER = "51956771681";
 
+const FEATURE_ICONS = {
+  "pórtico": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V7l8-4 8 4v14"/><path d="M4 21h16"/><path d="M9 21V12h6v9"/></svg>',
+  "título": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>',
+  "agua": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s6 7 6 12a6 6 0 0 1-12 0c0-5 6-12 6-12z"/></svg>'
+};
+function featureIcon(text){
+  const key = Object.keys(FEATURE_ICONS).find(k => text.toLowerCase().includes(k));
+  return key ? FEATURE_ICONS[key] : "";
+}
+
 const proyectos = [
   {
     nombre: "Villa Supe",
@@ -247,7 +281,7 @@ proyectos.forEach(p => {
   const card = document.createElement("div");
   card.className = "proj-card";
   const fotosHtml = Array.from({ length: p.fotos }).map((_, i) => `<div class="proj-photo">Foto ${i + 1}<br>próximamente</div>`).join("");
-  const featuresHtml = p.features.map(f => `<span class="feature">${f}</span>`).join("");
+  const featuresHtml = p.features.map(f => `<span class="feature">${featureIcon(f)}${f}</span>`).join("");
   card.innerHTML = `
     <div class="proj-gallery">${fotosHtml}</div>
     <div class="proj-body">
