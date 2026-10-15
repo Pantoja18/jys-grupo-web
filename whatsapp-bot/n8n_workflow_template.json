@@ -1,0 +1,479 @@
+{
+  "name": "JS CONSULTORES Y ABOGADOS - Asistente WhatsApp (Claude)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → Claude → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato, se extrae el texto, se arma el historial, se llama a Claude y se responde por WhatsApp.\n3. Si Claude emite un bloque `<cita>`, se notifica al estudio.\n\nVariables: ver `.env.example`. System prompt: `SYSTEM_PROMPT_PATH`.",
+        "height": 300,
+        "width": 520
+      },
+      "id": "328268f1-a95a-44b7-8a13-dd907eb706c5",
+      "name": "Nota",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -260,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "aff8977e-ffe1-407e-bc84-0e9706c9d5b3",
+      "name": "Webhook Verificación (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -60
+      ],
+      "webhookId": "9ae13350-8460-4781-8069-1cc6c643a921"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ea4c344c-becd-429a-88b1-aa36cc588e4d",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "rightValue": "={{ $env.WEBHOOK_VERIFY_TOKEN }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8b6ce530-a479-4d53-87ae-6f1159b2d2f1",
+      "name": "¿Token válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        220,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "b47c13b7-e881-41e1-b040-94fa318b89ce",
+      "name": "Responder challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "83c02e3b-4727-4b0d-b0a5-d779db239e86",
+      "name": "Responder 403",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "e462c6b4-b937-40a4-b4f8-8cb1f1d0661e",
+      "name": "Webhook Mensajes (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        260
+      ],
+      "webhookId": "9f2acb8b-a902-4644-a00e-6f530c85e91b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrae el mensaje entrante del payload de WhatsApp Cloud API.\n// Devuelve [] para eventos sin mensaje (p. ej. estados \"sent\"/\"delivered\"/\"read\").\nconst body = $input.first().json.body || {};\nconst value = body.entry?.[0]?.changes?.[0]?.value;\nconst msg = value?.messages?.[0];\nif (!msg) return [];\n\n// Deduplicación: Meta puede reenviar el mismo webhook.\nconst store = $getWorkflowStaticData('global');\nstore.processed = store.processed || [];\nif (store.processed.includes(msg.id)) return [];\nstore.processed.push(msg.id);\nstore.processed = store.processed.slice(-500);\n\nconst contactName = value.contacts?.[0]?.profile?.name || '';\nlet text = '';\nlet needsAI = true;\nlet directReply = '';\n\nswitch (msg.type) {\n  case 'text':\n    text = msg.text?.body || '';\n    break;\n  case 'interactive':\n    text = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';\n    break;\n  case 'button':\n    text = msg.button?.text || '';\n    break;\n  default:\n    // Audio, imagen, documento, ubicación, etc.: se avisa al modelo para que responda según el system prompt.\n    text = `[El usuario envió un mensaje de tipo \"${msg.type}\" que el asistente no puede leer.]`;\n}\n\nif (!text.trim()) {\n  needsAI = false;\n  directReply = 'Disculpe, no pude leer su mensaje. ¿Podría escribirnos su consulta en texto, por favor?';\n}\n\nreturn [{\n  json: {\n    from: msg.from,\n    messageId: msg.id,\n    contactName,\n    phoneNumberId: value.metadata?.phone_number_id,\n    text: text.slice(0, 4000),\n    needsAI,\n    directReply,\n  },\n}];\n"
+      },
+      "id": "9db3df16-cab7-4219-bb97-0ea9eb03145b",
+      "name": "Extraer mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "477a6bb8-3172-46a2-bd2b-50d254dd3331",
+              "leftValue": "={{ $json.needsAI }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2d01e8d8-6cb0-441f-8ddc-c8e506084058",
+      "name": "¿Requiere IA?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Arma la solicitud a la Claude Messages API con el historial de la conversación.\nconst fs = require('fs');\nconst input = $input.first().json;\n\nconst promptPath = $env.SYSTEM_PROMPT_PATH || '/data/system_prompt.md';\nlet systemPrompt;\ntry {\n  systemPrompt = fs.readFileSync(promptPath, 'utf8');\n} catch (e) {\n  throw new Error(`No se pudo leer el system prompt en ${promptPath}: ${e.message}`);\n}\n\n// Memoria simple en static data del workflow (solo persiste en ejecuciones de producción).\n// Para producción con volumen, reemplazar por Redis/Postgres (ver README).\nconst store = $getWorkflowStaticData('global');\nstore.conversations = store.conversations || {};\nconst maxTurns = parseInt($env.CONVERSATION_MAX_MESSAGES || '20', 10);\nconst ttlMs = parseInt($env.CONVERSATION_TTL_HOURS || '24', 10) * 3600 * 1000;\n\nlet convo = store.conversations[input.from];\nif (!convo || Date.now() - convo.updatedAt > ttlMs) {\n  convo = { messages: [], updatedAt: Date.now() };\n}\n\n// Contexto dinámico (fecha/hora) solo en el turno actual, para no invalidar la caché del system prompt.\nconst now = new Date().toLocaleString('es-PE', {\n  timeZone: $env.BUSINESS_TIMEZONE || 'America/Lima',\n  dateStyle: 'full',\n  timeStyle: 'short',\n});\nconst nameNote = input.contactName ? ` | Nombre de perfil en WhatsApp: ${input.contactName}` : '';\nconst currentTurn = `[Contexto del sistema: fecha y hora actual: ${now}${nameNote}]\\n\\n${input.text}`;\n\nconst messages = [...convo.messages, { role: 'user', content: currentTurn }];\n\nconst anthropicBody = {\n  model: $env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',\n  max_tokens: parseInt($env.ANTHROPIC_MAX_TOKENS || '8000', 10),\n  thinking: { type: 'adaptive' },\n  output_config: { effort: $env.ANTHROPIC_EFFORT || 'low' },\n  // Si un clasificador de seguridad rechaza la solicitud, la API la reintenta en el modelo recomendado.\n  fallbacks: 'default',\n  system: [\n    { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },\n  ],\n  messages,\n};\n\nreturn [{ json: { ...input, anthropicBody, history: convo.messages, maxTurns } }];\n"
+      },
+      "id": "4d289edc-c53a-45ef-ae8e-ce986a414aaa",
+      "name": "Preparar solicitud Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "server-side-fallback-2026-07-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.anthropicBody) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "6ab2a843-6f9a-45f5-903d-0c1aad95e39b",
+      "name": "Claude (Messages API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        160
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesa la respuesta de Claude, extrae el bloque <cita> y actualiza la memoria.\nconst res = $input.first().json;\nconst ctx = $('Preparar solicitud Claude').first().json;\n\nconst FALLBACK = 'Disculpe, en este momento no puedo procesar su mensaje. Un miembro de nuestro equipo le contactará en horario de atención. Gracias por escribir a JS CONSULTORES Y ABOGADOS.';\n\nlet reply = '';\nlet ok = false;\n\nif (res.error || !Array.isArray(res.content)) {\n  reply = FALLBACK;\n} else if (res.stop_reason === 'refusal') {\n  reply = 'Disculpe, no puedo ayudarle con esa solicitud por este medio. Si lo desea, puedo coordinar una consulta con uno de nuestros abogados.';\n} else {\n  // Solo bloques de texto: la respuesta puede incluir bloques \"thinking\" que no se envían.\n  reply = res.content.filter(b => b.type === 'text').map(b => b.text).join('\\n').trim();\n  ok = reply.length > 0;\n  if (!ok) reply = FALLBACK;\n}\n\n// Extraer la solicitud de cita (si la hay) y retirarla del mensaje visible.\nlet appointment = null;\nconst match = reply.match(/<cita>([\\s\\S]*?)<\\/cita>/);\nif (match) {\n  try { appointment = JSON.parse(match[1]); } catch (e) { appointment = { raw: match[1] }; }\n  reply = reply.replace(match[0], '').trim();\n}\n\n// WhatsApp admite hasta 4096 caracteres por mensaje de texto.\nif (reply.length > 4000) reply = reply.slice(0, 3990) + '…';\n\n// Guardar el turno en memoria solo si Claude respondió correctamente.\nif (ok) {\n  const store = $getWorkflowStaticData('global');\n  store.conversations = store.conversations || {};\n  const msgs = [\n    ...ctx.history,\n    { role: 'user', content: ctx.text },\n    { role: 'assistant', content: reply },\n  ];\n  // Recortar por pares para que el historial siempre empiece con un turno \"user\".\n  let trimmed = msgs.slice(-ctx.maxTurns);\n  if (trimmed.length && trimmed[0].role !== 'user') trimmed = trimmed.slice(1);\n  store.conversations[ctx.from] = { messages: trimmed, updatedAt: Date.now() };\n}\n\nreturn [{\n  json: {\n    from: ctx.from,\n    phoneNumberId: ctx.phoneNumberId,\n    reply,\n    appointment,\n    hasAppointment: !!appointment,\n    usage: res.usage || null,\n  },\n}];\n"
+      },
+      "id": "a5915d08-293d-463e-82c0-c008a8330ed3",
+      "name": "Procesar respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nreturn [{ json: { from: input.from, phoneNumberId: input.phoneNumberId, reply: input.directReply, appointment: null, hasAppointment: false } }];\n"
+      },
+      "id": "7983cfcf-24d2-4fdf-92a2-3ea5cbdffaf5",
+      "name": "Respuesta directa",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.META_API_VERSION || 'v21.0' }}/{{ $json.phoneNumberId || $env.PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.META_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.from, type: 'text', text: { preview_url: false, body: $json.reply } }) }}",
+        "options": {}
+      },
+      "id": "b6004696-6e58-42d3-a429-49d5cbc4edcb",
+      "name": "Enviar respuesta WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        260
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "d1e3ec45-3617-497d-95a6-887b99f4a848",
+              "leftValue": "={{ $json.hasAppointment }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0589b6c3-e1b2-4ba8-ab23-f0bc73e50975",
+      "name": "¿Solicitud de cita?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.FIRM_NOTIFICATION_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ firma: 'JS CONSULTORES Y ABOGADOS', canal: 'whatsapp', telefono: $json.from, solicitud: $json.appointment, recibido: $now.toISO() }) }}",
+        "options": {}
+      },
+      "id": "c7ffb758-2dc3-4f85-b1eb-e95578ecbaa9",
+      "name": "Notificar al estudio (cita)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        40
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Reemplazar por Google Sheets, Gmail, Google Calendar o el CRM del estudio."
+    }
+  ],
+  "connections": {
+    "Webhook Verificación (GET)": {
+      "main": [
+        [
+          {
+            "node": "¿Token válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Token válido?": {
+      "main": [
+        [
+          {
+            "node": "Responder challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 403",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Mensajes (POST)": {
+      "main": [
+        [
+          {
+            "node": "Extraer mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer mensaje": {
+      "main": [
+        [
+          {
+            "node": "¿Requiere IA?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Requiere IA?": {
+      "main": [
+        [
+          {
+            "node": "Preparar solicitud Claude",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta directa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar solicitud Claude": {
+      "main": [
+        [
+          {
+            "node": "Claude (Messages API)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude (Messages API)": {
+      "main": [
+        [
+          {
+            "node": "Procesar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar respuesta": {
+      "main": [
+        [
+          {
+            "node": "Enviar respuesta WhatsApp",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Solicitud de cita?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta directa": {
+      "main": [
+        [
+          {
+            "node": "Enviar respuesta WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Solicitud de cita?": {
+      "main": [
+        [
+          {
+            "node": "Notificar al estudio (cita)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveDataSuccessExecution": "none"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

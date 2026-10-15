@@ -1,0 +1,33 @@
+# JS CONSULTORES Y ABOGADOS – n8n local para pruebas del asistente de WhatsApp
+# Uso: docker compose up -d   →   http://localhost:5678
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: js-consultores-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    env_file:
+      - .env
+    environment:
+      # Valores locales: tienen prioridad sobre los de .env.
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      # URL pública de ngrok (se define en .env); n8n la usa para mostrar las URLs de los webhooks.
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=America/Lima
+      - TZ=America/Lima
+      # Requeridos por el flujo: $env en expresiones y "fs" en nodos Code para leer el system prompt.
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      - NODE_FUNCTION_ALLOW_BUILTIN=fs,crypto
+      - SYSTEM_PROMPT_PATH=/data/system_prompt.md
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./system_prompt.md:/data/system_prompt.md:ro
+      - ./n8n_workflow_template.json:/data/n8n_workflow_template.json:ro
+
+volumes:
+  n8n_data:
+    name: n8n_data

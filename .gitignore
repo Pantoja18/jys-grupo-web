@@ -1,0 +1,7 @@
+# Credenciales: nunca subir archivos .env (en ninguna carpeta)
+.env
+**/.env
+!**/.env.example
+
+# Salida del build de Cloudflare Pages
+dist/
