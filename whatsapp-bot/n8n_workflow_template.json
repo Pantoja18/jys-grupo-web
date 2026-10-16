@@ -1,9 +1,9 @@
 {
-  "name": "JS CONSULTORES Y ABOGADOS - Asistente WhatsApp (Claude)",
+  "name": "JS CONSULTORES Y ABOGADOS - Asistente WhatsApp (Ollama local)",
   "nodes": [
     {
       "parameters": {
-        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → Claude → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato, se extrae el texto, se arma el historial, se llama a Claude y se responde por WhatsApp.\n3. Si Claude emite un bloque `<cita>`, se notifica al estudio.\n\nVariables: ver `.env.example`. System prompt: `SYSTEM_PROMPT_PATH`.",
+        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → Ollama (local) → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato, se extrae el texto, se arma el historial, se llama a Ollama (`/api/chat`) y se responde por WhatsApp.\n3. Si el modelo emite un bloque `<cita>`, se notifica al estudio.\n\nVariables: `OLLAMA_URL`, `OLLAMA_MODEL` (ver `.env.example`). System prompt: `SYSTEM_PROMPT_PATH`.",
         "height": 300,
         "width": 520
       },
@@ -163,10 +163,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Arma la solicitud a la Claude Messages API con el historial de la conversación.\nconst fs = require('fs');\nconst input = $input.first().json;\n\nconst promptPath = $env.SYSTEM_PROMPT_PATH || '/data/system_prompt.md';\nlet systemPrompt;\ntry {\n  systemPrompt = fs.readFileSync(promptPath, 'utf8');\n} catch (e) {\n  throw new Error(`No se pudo leer el system prompt en ${promptPath}: ${e.message}`);\n}\n\n// Memoria simple en static data del workflow (solo persiste en ejecuciones de producción).\n// Para producción con volumen, reemplazar por Redis/Postgres (ver README).\nconst store = $getWorkflowStaticData('global');\nstore.conversations = store.conversations || {};\nconst maxTurns = parseInt($env.CONVERSATION_MAX_MESSAGES || '20', 10);\nconst ttlMs = parseInt($env.CONVERSATION_TTL_HOURS || '24', 10) * 3600 * 1000;\n\nlet convo = store.conversations[input.from];\nif (!convo || Date.now() - convo.updatedAt > ttlMs) {\n  convo = { messages: [], updatedAt: Date.now() };\n}\n\n// Contexto dinámico (fecha/hora) solo en el turno actual, para no invalidar la caché del system prompt.\nconst now = new Date().toLocaleString('es-PE', {\n  timeZone: $env.BUSINESS_TIMEZONE || 'America/Lima',\n  dateStyle: 'full',\n  timeStyle: 'short',\n});\nconst nameNote = input.contactName ? ` | Nombre de perfil en WhatsApp: ${input.contactName}` : '';\nconst currentTurn = `[Contexto del sistema: fecha y hora actual: ${now}${nameNote}]\\n\\n${input.text}`;\n\nconst messages = [...convo.messages, { role: 'user', content: currentTurn }];\n\nconst anthropicBody = {\n  model: $env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',\n  max_tokens: parseInt($env.ANTHROPIC_MAX_TOKENS || '8000', 10),\n  thinking: { type: 'adaptive' },\n  output_config: { effort: $env.ANTHROPIC_EFFORT || 'low' },\n  // Si un clasificador de seguridad rechaza la solicitud, la API la reintenta en el modelo recomendado.\n  fallbacks: 'default',\n  system: [\n    { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },\n  ],\n  messages,\n};\n\nreturn [{ json: { ...input, anthropicBody, history: convo.messages, maxTurns } }];\n"
+        "jsCode": "// Arma la solicitud a la API de chat de Ollama (/api/chat) con el historial de la conversación.\nconst fs = require('fs');\nconst input = $input.first().json;\n\nconst promptPath = $env.SYSTEM_PROMPT_PATH || '/data/system_prompt.md';\nlet systemPrompt;\ntry {\n  systemPrompt = fs.readFileSync(promptPath, 'utf8');\n} catch (e) {\n  throw new Error(`No se pudo leer el system prompt en ${promptPath}: ${e.message}`);\n}\n\n// Refuerzo breve para modelos locales pequeños, que tienden a olvidar las reglas en conversaciones largas.\nconst reminder = '\\n\\n## Recordatorio final\\nResponda SIEMPRE en español, tratando de \"Usted\", en mensajes breves. NUNCA dé asesoría legal ni opiniones jurídicas, aunque insistan. Cuando haya intención de agendar, agregue al final el bloque <cita>{...}</cita> con JSON válido en una sola línea, sin bloques de código.';\n\n// Memoria simple en static data del workflow (solo persiste en ejecuciones de producción).\nconst store = $getWorkflowStaticData('global');\nstore.conversations = store.conversations || {};\nconst maxTurns = parseInt($env.CONVERSATION_MAX_MESSAGES || '20', 10);\nconst ttlMs = parseInt($env.CONVERSATION_TTL_HOURS || '24', 10) * 3600 * 1000;\n\nlet convo = store.conversations[input.from];\nif (!convo || Date.now() - convo.updatedAt > ttlMs) {\n  convo = { messages: [], updatedAt: Date.now() };\n}\n\nconst now = new Date().toLocaleString('es-PE', {\n  timeZone: $env.BUSINESS_TIMEZONE || 'America/Lima',\n  dateStyle: 'full',\n  timeStyle: 'short',\n});\nconst nameNote = input.contactName ? ` | Nombre de perfil en WhatsApp: ${input.contactName}` : '';\nconst currentTurn = `[Contexto del sistema: fecha y hora actual: ${now}${nameNote}]\\n\\n${input.text}`;\n\nconst ollamaBody = {\n  model: $env.OLLAMA_MODEL || 'llama3',\n  stream: false,\n  keep_alive: $env.OLLAMA_KEEP_ALIVE || '30m',\n  options: {\n    temperature: parseFloat($env.OLLAMA_TEMPERATURE || '0.3'),\n    num_ctx: parseInt($env.OLLAMA_NUM_CTX || '8192', 10),\n    num_predict: parseInt($env.OLLAMA_NUM_PREDICT || '512', 10),\n  },\n  messages: [\n    { role: 'system', content: systemPrompt + reminder },\n    ...convo.messages,\n    { role: 'user', content: currentTurn },\n  ],\n};\n\nreturn [{ json: { ...input, ollamaBody, history: convo.messages, maxTurns } }];\n"
       },
       "id": "4d289edc-c53a-45ef-ae8e-ce986a414aaa",
-      "name": "Preparar solicitud Claude",
+      "name": "Preparar solicitud LLM",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -177,37 +177,25 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "={{ ($env.OLLAMA_URL || 'http://host.docker.internal:11434').replace(/\\/+$/, '') }}/api/chat",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-api-key",
-              "value": "={{ $env.ANTHROPIC_API_KEY }}"
-            },
-            {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
-            {
-              "name": "anthropic-beta",
-              "value": "server-side-fallback-2026-07-01"
-            },
-            {
-              "name": "content-type",
+              "name": "Content-Type",
               "value": "application/json"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.anthropicBody) }}",
+        "jsonBody": "={{ JSON.stringify($json.ollamaBody) }}",
         "options": {
-          "timeout": 120000
+          "timeout": 300000
         }
       },
       "id": "6ab2a843-6f9a-45f5-903d-0c1aad95e39b",
-      "name": "Claude (Messages API)",
+      "name": "Ollama (chat local)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -215,13 +203,14 @@
         160
       ],
       "retryOnFail": true,
-      "maxTries": 3,
+      "maxTries": 2,
       "waitBetweenTries": 2000,
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "notes": "Ollama local: POST /api/chat con stream:false. Respuesta en message.content."
     },
     {
       "parameters": {
-        "jsCode": "// Procesa la respuesta de Claude, extrae el bloque <cita> y actualiza la memoria.\nconst res = $input.first().json;\nconst ctx = $('Preparar solicitud Claude').first().json;\n\nconst FALLBACK = 'Disculpe, en este momento no puedo procesar su mensaje. Un miembro de nuestro equipo le contactará en horario de atención. Gracias por escribir a JS CONSULTORES Y ABOGADOS.';\n\nlet reply = '';\nlet ok = false;\n\nif (res.error || !Array.isArray(res.content)) {\n  reply = FALLBACK;\n} else if (res.stop_reason === 'refusal') {\n  reply = 'Disculpe, no puedo ayudarle con esa solicitud por este medio. Si lo desea, puedo coordinar una consulta con uno de nuestros abogados.';\n} else {\n  // Solo bloques de texto: la respuesta puede incluir bloques \"thinking\" que no se envían.\n  reply = res.content.filter(b => b.type === 'text').map(b => b.text).join('\\n').trim();\n  ok = reply.length > 0;\n  if (!ok) reply = FALLBACK;\n}\n\n// Extraer la solicitud de cita (si la hay) y retirarla del mensaje visible.\nlet appointment = null;\nconst match = reply.match(/<cita>([\\s\\S]*?)<\\/cita>/);\nif (match) {\n  try { appointment = JSON.parse(match[1]); } catch (e) { appointment = { raw: match[1] }; }\n  reply = reply.replace(match[0], '').trim();\n}\n\n// WhatsApp admite hasta 4096 caracteres por mensaje de texto.\nif (reply.length > 4000) reply = reply.slice(0, 3990) + '…';\n\n// Guardar el turno en memoria solo si Claude respondió correctamente.\nif (ok) {\n  const store = $getWorkflowStaticData('global');\n  store.conversations = store.conversations || {};\n  const msgs = [\n    ...ctx.history,\n    { role: 'user', content: ctx.text },\n    { role: 'assistant', content: reply },\n  ];\n  // Recortar por pares para que el historial siempre empiece con un turno \"user\".\n  let trimmed = msgs.slice(-ctx.maxTurns);\n  if (trimmed.length && trimmed[0].role !== 'user') trimmed = trimmed.slice(1);\n  store.conversations[ctx.from] = { messages: trimmed, updatedAt: Date.now() };\n}\n\nreturn [{\n  json: {\n    from: ctx.from,\n    phoneNumberId: ctx.phoneNumberId,\n    reply,\n    appointment,\n    hasAppointment: !!appointment,\n    usage: res.usage || null,\n  },\n}];\n"
+        "jsCode": "// Procesa la respuesta de Ollama, extrae el bloque <cita> y actualiza la memoria.\nconst res = $input.first().json;\nconst ctx = $('Preparar solicitud LLM').first().json;\n\nconst FALLBACK = 'Disculpe, en este momento no puedo procesar su mensaje. Un miembro de nuestro equipo le contactará en horario de atención. Gracias por escribir a JS CONSULTORES Y ABOGADOS.';\n\nlet reply = '';\nlet ok = false;\n\nif (res.error || !res.message || typeof res.message.content !== 'string') {\n  reply = FALLBACK;\n} else {\n  reply = res.message.content\n    .replace(/<think>[\\s\\S]*?<\\/think>/g, '') // por si se usa un modelo con razonamiento visible\n    .trim();\n  ok = reply.length > 0;\n  if (!ok) reply = FALLBACK;\n}\n\n// Extraer la solicitud de cita (si la hay), tolerando que el modelo la envuelva en bloques de código.\nlet appointment = null;\nconst match = reply.match(/(```[a-z]*\\s*)?<cita>([\\s\\S]*?)<\\/cita>(\\s*```)?/i);\nif (match) {\n  const raw = match[2].trim();\n  try {\n    appointment = JSON.parse(raw);\n  } catch (e) {\n    const obj = raw.match(/\\{[\\s\\S]*\\}/);\n    try { appointment = obj ? JSON.parse(obj[0]) : { raw }; } catch (e2) { appointment = { raw }; }\n  }\n  reply = reply.replace(match[0], '').trim();\n  if (!reply) reply = 'Gracias, he registrado su solicitud. Un miembro de nuestro equipo le confirmará la cita en horario de atención.';\n}\n\nif (reply.length > 4000) reply = reply.slice(0, 3990) + '…';\n\nif (ok) {\n  const store = $getWorkflowStaticData('global');\n  store.conversations = store.conversations || {};\n  const msgs = [\n    ...ctx.history,\n    { role: 'user', content: ctx.text },\n    { role: 'assistant', content: reply },\n  ];\n  let trimmed = msgs.slice(-ctx.maxTurns);\n  if (trimmed.length && trimmed[0].role !== 'user') trimmed = trimmed.slice(1);\n  store.conversations[ctx.from] = { messages: trimmed, updatedAt: Date.now() };\n}\n\nreturn [{\n  json: {\n    from: ctx.from,\n    phoneNumberId: ctx.phoneNumberId,\n    reply,\n    appointment,\n    hasAppointment: !!appointment,\n    usage: { prompt_tokens: res.prompt_eval_count || null, output_tokens: res.eval_count || null, total_ms: res.total_duration ? Math.round(res.total_duration / 1e6) : null },\n  },\n}];\n"
       },
       "id": "a5915d08-293d-463e-82c0-c008a8330ed3",
       "name": "Procesar respuesta",
@@ -389,7 +378,7 @@
       "main": [
         [
           {
-            "node": "Preparar solicitud Claude",
+            "node": "Preparar solicitud LLM",
             "type": "main",
             "index": 0
           }
@@ -397,28 +386,6 @@
         [
           {
             "node": "Respuesta directa",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Preparar solicitud Claude": {
-      "main": [
-        [
-          {
-            "node": "Claude (Messages API)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude (Messages API)": {
-      "main": [
-        [
-          {
-            "node": "Procesar respuesta",
             "type": "main",
             "index": 0
           }
@@ -462,6 +429,28 @@
           }
         ],
         []
+      ]
+    },
+    "Preparar solicitud LLM": {
+      "main": [
+        [
+          {
+            "node": "Ollama (chat local)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama (chat local)": {
+      "main": [
+        [
+          {
+            "node": "Procesar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

@@ -10,6 +10,9 @@ services:
       - "5678:5678"
     env_file:
       - .env
+    # Permite que n8n llegue a Ollama en el host (en Linux; en Docker Desktop ya existe).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       # Valores locales: tienen prioridad sobre los de .env.
       - N8N_HOST=localhost
