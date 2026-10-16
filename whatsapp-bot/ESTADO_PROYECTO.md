@@ -1,6 +1,6 @@
 # Estado del proyecto – Valeria, asistente de WhatsApp de J&S
 
-*Actualizado: 16/10/2026.* Este archivo resume el contexto del proyecto para retomarlo en cualquier sesión.
+*Actualizado: 16/10/2026 (entorno local, ngrok y verificación GET listos).* Este archivo resume el contexto del proyecto para retomarlo en cualquier sesión.
 
 ## Resumen
 
@@ -12,12 +12,16 @@
 
 | Elemento | Estado |
 |---|---|
-| Docker + n8n (`docker compose up -d`, volumen `n8n_data`) | ✅ Funcionando en local, responde HTTP 200 |
-| Ollama con `llama3` | ✅ Funcionando en local |
-| Flujo n8n (`n8n_workflow_template.json`) | ✅ Llama a `{OLLAMA_URL}/api/chat`; JSON válido |
-| `system_prompt.md` (reglas de Valeria) | ✅ Completo |
-| Rama `whatsapp-bot` en GitHub | ✅ Subida |
-| Conexión con Meta (webhook + número de prueba) | ⏳ Siguiente paso: ver `GUIA_META_NGROK.md` |
+| n8n en Docker (contenedor `js-consultores-n8n`, volumen `n8n_data`) | ✅ Estable |
+| `N8N_ENCRYPTION_KEY` | ✅ El `.env` usa la misma clave que el volumen `n8n_data`. **No cambiarla** (n8n dejaría de leer sus credenciales) |
+| `WEBHOOK_VERIFY_TOKEN` | ✅ Definido en el `.env` |
+| ngrok (plan Free) | ✅ Dominio fijo `https://feisty-papaya-feast.ngrok-free.dev`, se inicia con `ngrok http 5678` (sin dominio personalizado) |
+| `WEBHOOK_URL` | ✅ `https://feisty-papaya-feast.ngrok-free.dev/` |
+| Flujo n8n | ✅ Importado y publicado como **"v1 - Ollama local"** |
+| Verificación GET (`hub.challenge=12345` por ngrok) | ✅ Responde `12345` |
+| n8n → Ollama (`llama3:latest`, `host.docker.internal:11434`) | ✅ Conecta |
+| Asistente de n8n | Desactivado |
+| Clave de Anthropic | Eliminada; el bot usa solo Ollama |
 
 ## Reglas de Valeria (`system_prompt.md`, no modificar sin revisión del estudio)
 
@@ -40,12 +44,14 @@
 | `GUIA_META_NGROK.md` | **Siguiente paso:** paso a paso de Meta y ngrok, pruebas y errores |
 | `README.md` | Arquitectura, flujo y seguridad |
 
-## Próximos pasos
+## Próximos pasos (en este orden)
 
-1. **Conectar Meta y ngrok** siguiendo `GUIA_META_NGROK.md` (credenciales → prueba `hello_world` → ngrok con dominio fijo → webhook → prueba de punta a punta).
-2. **Probar los casos críticos** de la tabla E.3 de esa guía. Llama 3 (8B) cumple reglas largas con menos fiabilidad; si rompe la prohibición de asesoría legal, usar un modelo mayor o volver a Claude para producción (las variables `ANTHROPIC_*` se conservan en `.env.example`).
-3. **Cloudflare Pages, antes de unir la rama a `main`:** *Build command* `bash build.sh`, *Build output directory* `dist` (opcional: excluir `whatsapp-bot/*` en *Build watch paths*). Sin esto, la web publicaría `/whatsapp-bot/...`.
-4. **Token permanente de Meta** (guía, sección F).
+1. **Credenciales de Meta:** crear la app en Meta Developers y completar `META_ACCESS_TOKEN`, `PHONE_NUMBER_ID` y `META_API_VERSION` en el `.env`; luego `docker compose up -d --force-recreate` (guía, secciones A y B).
+2. **Webhook en Meta:** URL `https://feisty-papaya-feast.ngrok-free.dev/webhook/whatsapp`, token = `WEBHOOK_VERIFY_TOKEN`, y suscribir el campo `messages` (guía, sección D.3–D.4).
+3. **Prueba de extremo a extremo** por WhatsApp con la tabla de casos críticos (guía, sección E).
+4. **Guardar las citas en Google Sheets:** reemplazar el nodo "Notificar al estudio (cita)" por un nodo de Google Sheets. Hoy `FIRM_NOTIFICATION_WEBHOOK_URL` está vacío y **las citas se pierden**. Tras editar el flujo hay que reimportarlo y volver a publicarlo en n8n.
+
+Después: Cloudflare Pages (*Build command* `bash build.sh`, *Build output directory* `dist`) antes de unir la rama a `main`, y token permanente de Meta (guía, sección F).
 
 ## Pendientes y decisiones abiertas
 

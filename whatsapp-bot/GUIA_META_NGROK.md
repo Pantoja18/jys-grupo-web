@@ -36,15 +36,15 @@ curl -s -X POST "https://graph.facebook.com/v21.0/<PHONE_NUMBER_ID>/messages" \
    ```bash
    ngrok config add-authtoken <SU_TOKEN_DE_NGROK>
    ```
-2. **Recomendado: use su dominio fijo gratuito.** En https://dashboard.ngrok.com → *Domains*, reclame el dominio estático gratuito. Así la URL no cambia cada vez que reinicia ngrok y no tiene que volver a configurar Meta:
+2. **Dominio fijo.** El plan Free asigna automáticamente un dominio fijo que termina en **`.ngrok-free.dev`** (véalo en https://dashboard.ngrok.com → *Domains*). No necesita opciones extra; basta con:
    ```bash
-   ngrok http --url=<su-dominio>.ngrok-free.app 5678
+   ngrok http 5678
    ```
-   (En versiones antiguas de ngrok la opción se llama `--domain`.) Sin dominio fijo: `ngrok http 5678`, y copie la URL `https://...` de la línea *Forwarding*.
+   La línea *Forwarding* debe mostrar siempre el mismo dominio. El plan Free no permite dominios personalizados.
 3. Ponga esa URL en el `.env` (con `/` al final) y aplique el cambio:
    ```bash
    # .env
-   WEBHOOK_URL=https://<su-dominio>.ngrok-free.app/
+   WEBHOOK_URL=https://<su-dominio>.ngrok-free.dev/
    ```
    ```bash
    docker compose up -d
@@ -56,11 +56,11 @@ curl -s -X POST "https://graph.facebook.com/v21.0/<PHONE_NUMBER_ID>/messages" \
 1. En n8n (http://localhost:5678) confirme que el flujo está **activo** (interruptor *Active*). Meta usa la ruta de producción `/webhook/whatsapp`; la ruta `/webhook-test/...` no sirve para esto.
 2. **Pruebe la verificación usted mismo antes que Meta:**
    ```bash
-   curl -s "https://<su-dominio>.ngrok-free.app/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=<WEBHOOK_VERIFY_TOKEN>&hub.challenge=12345"
+   curl -s "https://<su-dominio>.ngrok-free.dev/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=<WEBHOOK_VERIFY_TOKEN>&hub.challenge=12345"
    ```
    Debe devolver exactamente `12345`. Si devuelve `Forbidden`, el token no coincide con el `.env`; si devuelve un error 404 de n8n, el flujo no está activo.
 3. En Meta: **WhatsApp → Configuración** (*Configuration*) → sección **Webhook → Editar**:
-   - **URL de devolución de llamada:** `https://<su-dominio>.ngrok-free.app/webhook/whatsapp`
+   - **URL de devolución de llamada:** `https://<su-dominio>.ngrok-free.dev/webhook/whatsapp`
    - **Token de verificación:** el valor de `WEBHOOK_VERIFY_TOKEN`
    - Pulse **Verificar y guardar**.
 4. En la misma página, **Campos del webhook → Administrar**, y suscríbase a **`messages`**. Sin esta suscripción Meta verifica la URL pero nunca envía los mensajes.
