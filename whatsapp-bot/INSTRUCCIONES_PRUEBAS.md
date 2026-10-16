@@ -1,6 +1,8 @@
 # Pruebas locales – Valeria, asistente de WhatsApp de JS CONSULTORES Y ABOGADOS
 
-**Requisitos (una sola vez):** Docker Desktop, ngrok con su cuenta vinculada (`ngrok config add-authtoken <SU_TOKEN>`) y una app en Meta for Developers con el producto WhatsApp.
+**Requisitos (una sola vez):** Docker Desktop, [Ollama](https://ollama.com) con el modelo descargado (`ollama pull llama3`), ngrok con su cuenta vinculada (`ngrok config add-authtoken <SU_TOKEN>`) y una app en Meta for Developers con el producto WhatsApp.
+
+> Guía detallada de Meta y ngrok (obtener tokens, dominio fijo, pruebas y errores): **`GUIA_META_NGROK.md`**.
 
 ## Paso 1 – Configurar `.env`
 
@@ -8,9 +10,16 @@ En la carpeta del proyecto:
 ```bash
 cp .env.example .env
 ```
-Complete las variables obligatorias: `ANTHROPIC_API_KEY`, `META_ACCESS_TOKEN`, `PHONE_NUMBER_ID`, `WEBHOOK_VERIFY_TOKEN` y `N8N_ENCRYPTION_KEY`. `WEBHOOK_URL` se completa en el paso 3.
+Complete las variables obligatorias: `OLLAMA_URL`, `OLLAMA_MODEL`, `META_ACCESS_TOKEN`, `PHONE_NUMBER_ID`, `WEBHOOK_VERIFY_TOKEN` y `N8N_ENCRYPTION_KEY`. `WEBHOOK_URL` se completa en el paso 3.
 
 ## Paso 2 – Iniciar n8n
+
+Verifique primero que Ollama responde (en el equipo anfitrión):
+```bash
+curl -s http://localhost:11434/api/tags      # debe listar "llama3"
+```
+**En Linux**, Ollama escucha solo en `127.0.0.1` y el contenedor no lo alcanza. Configúrelo para escuchar en todas las interfaces (`sudo systemctl edit ollama` → `Environment="OLLAMA_HOST=0.0.0.0"`, luego `sudo systemctl restart ollama`), y no exponga el puerto 11434 a internet. En Docker Desktop (Windows/macOS) no hace falta.
+
 
 ```bash
 docker compose up -d
@@ -45,6 +54,7 @@ docker compose ps                    # estado del contenedor (debe decir "runnin
 docker compose logs -f n8n           # logs en vivo (Ctrl+C para salir)
 curl -s http://localhost:5678/healthz   # debe responder {"status":"ok"}
 docker volume inspect n8n_data   # volumen persistente
+docker compose exec n8n wget -qO- http://host.docker.internal:11434/api/tags   # n8n alcanza a Ollama
 ```
 Para detener: `docker compose down` (los datos se conservan en el volumen). Para reiniciar tras cambiar `.env`: `docker compose up -d`.
 
@@ -53,4 +63,6 @@ Para detener: `docker compose down` (los datos se conservan en el volumen). Para
 - **Meta no verifica el webhook:** el flujo no está activo, el token no coincide, o la URL no termina en `/webhook/whatsapp`.
 - **La URL de ngrok cambió** (plan gratuito, al reiniciar ngrok): repita los pasos 3 y 4.
 - **No llegan respuestas:** el token temporal de Meta vence en 24 h; revise también que su número esté como destinatario de prueba.
+- **Valeria responde con el mensaje de disculpa:** Ollama no está corriendo, el contenedor no lo alcanza (ver Paso 2) o falta `ollama pull llama3`. Revise el error del nodo *Ollama (chat local)* en n8n → *Executions*.
+- **Respuestas lentas:** en CPU, Llama 3 puede tardar decenas de segundos por mensaje; la primera respuesta es más lenta porque carga el modelo.
 - **Cambios en `system_prompt.md`:** se aplican en el siguiente mensaje, sin reiniciar.

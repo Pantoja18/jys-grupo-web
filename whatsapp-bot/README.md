@@ -5,11 +5,11 @@ Asistente conversacional para la atención inicial de **JS CONSULTORES Y ABOGADO
 ## Arquitectura
 
 ```
-┌──────────────┐   webhook (POST)   ┌──────────────────────────────┐   HTTPS    ┌───────────────────┐
-│   Usuario    │ ─────────────────▶ │             n8n              │ ─────────▶ │  Claude API       │
-│  (WhatsApp)  │                    │                              │            │  /v1/messages     │
-│              │ ◀───────────────── │  extraer → historial →       │ ◀───────── │  claude-sonnet-5-5│
-└──────────────┘  Graph API /messages│  llamar Claude → responder   │            └───────────────────┘
+┌──────────────┐   webhook (POST)   ┌──────────────────────────────┐   HTTP     ┌───────────────────┐
+│   Usuario    │ ─────────────────▶ │             n8n              │ ─────────▶ │  Ollama (local)   │
+│  (WhatsApp)  │                    │                              │            │  /api/chat        │
+│              │ ◀───────────────── │  extraer → historial →       │ ◀───────── │  llama3           │
+└──────────────┘  Graph API /messages│  llamar al LLM → responder   │            └───────────────────┘
        ▲                            └──────────────┬───────────────┘
        │                                           │ solicitud de cita (<cita> JSON)
  WhatsApp Cloud API (Meta)                         ▼
@@ -19,17 +19,19 @@ Asistente conversacional para la atención inicial de **JS CONSULTORES Y ABOGADO
 | Componente | Rol |
 |---|---|
 | **WhatsApp Cloud API** (Meta) | Entrega cada mensaje entrante a n8n por webhook y envía las respuestas mediante `POST /{phone-number-id}/messages`. |
-| **n8n** | Orquestador: valida el webhook, extrae el mensaje, mantiene el historial por número, llama a Claude, envía la respuesta y notifica las solicitudes de cita. |
-| **Claude** (Anthropic Messages API) | Genera la respuesta siguiendo `system_prompt.md`: tono formal, filtrado del caso, agendamiento y el límite de no dar asesoría legal. |
+| **n8n** | Orquestador: valida el webhook, extrae el mensaje, mantiene el historial por número, llama al modelo local, envía la respuesta y notifica las solicitudes de cita. |
+| **Ollama** con **Llama 3** (en el mismo equipo, sin API key) | Genera la respuesta siguiendo `system_prompt.md`: tono formal, filtrado del caso, agendamiento y el límite de no dar asesoría legal. |
 
 ### Sobre el modelo
 
-El proyecto se pidió con **Claude 3.5 Sonnet**, pero ese modelo **fue retirado el 28/10/2025** y la API ya no lo acepta. La plantilla usa su sucesor actual en la línea Sonnet, **`claude-sonnet-5-5`**, configurable en `ANTHROPIC_MODEL`. Ajustes incluidos en la llamada:
+El modelo corre localmente con **Ollama** (`ollama pull llama3`); no se envían conversaciones a servicios externos de IA ni hace falta API key. n8n llama a `POST {OLLAMA_URL}/api/chat` (por defecto `http://host.docker.internal:11434`) con:
 
-- `thinking: {type: "adaptive"}` con `output_config.effort: "low"`, adecuado para chat (subir a `medium` si el filtrado de casos queda corto).
-- `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`): si un clasificador de seguridad rechaza un mensaje, la API lo reintenta automáticamente en el modelo recomendado. Puede quitarlo eliminando el campo y el header.
-- El system prompt va con `cache_control` para aprovechar la caché de prompts; la fecha/hora se inyecta en el mensaje del usuario y no en el system prompt para no invalidarla.
-- La respuesta puede incluir bloques de razonamiento (`thinking`); el flujo envía a WhatsApp solo los bloques `text` y revisa `stop_reason` antes de leer el contenido.
+- `stream: false` y el system prompt como primer mensaje `system`, seguido del historial.
+- `options.num_ctx: 8192`: el system prompt ocupa ~3.000 tokens y el contexto por defecto de Ollama lo truncaría. 8192 es el máximo de Llama 3; con historiales largos, baje `CONVERSATION_MAX_MESSAGES`.
+- `temperature: 0.3` para respuestas más consistentes con las reglas, y `keep_alive: 30m` para no recargar el modelo en cada mensaje.
+- Un recordatorio breve de las reglas clave (español, "Usted", sin asesoría legal, `<cita>` en JSON de una línea) al final del system prompt, porque los modelos pequeños tienden a olvidarlas en conversaciones largas. El flujo también acepta el bloque `<cita>` envuelto en bloques de código.
+
+**Limitación importante:** Llama 3 (8B) sigue instrucciones largas con menos fiabilidad que un modelo grande. Puede romper la prohibición de asesoría legal, dejar de tratar de "Usted" o emitir el bloque `<cita>` mal formado (el flujo descarta etiquetas incompletas para que el usuario no las vea). Pruebe la conversación a fondo antes de usarlo con clientes reales; si falla, use un modelo mayor en `OLLAMA_MODEL` (por ejemplo `llama3:70b`, si su equipo lo soporta).
 
 ## Flujo del workflow (`n8n_workflow_template.json`)
 
@@ -40,9 +42,9 @@ El proyecto se pidió con **Claude 3.5 Sonnet**, pero ese modelo **fue retirado 
 **Mensajes (POST `/webhook/whatsapp`)**
 1. **Webhook**: responde `200` de inmediato (Meta reintenta si tarda).
 2. **Extraer mensaje**: ignora eventos de estado (`sent`, `delivered`, `read`), descarta duplicados por `message.id` y normaliza texto, botones y listas. Audios, imágenes y documentos se pasan como aviso para que el asistente pida la consulta por texto.
-3. **Preparar solicitud Claude**: lee `system_prompt.md`, recupera el historial del número (máx. `CONVERSATION_MAX_MESSAGES`, se reinicia tras `CONVERSATION_TTL_HOURS`) y arma el cuerpo de la petición.
-4. **Claude (Messages API)**: `POST https://api.anthropic.com/v1/messages`, con 3 reintentos.
-5. **Procesar respuesta**: maneja errores y rechazos con un mensaje de cortesía, retira el bloque `<cita>{…}</cita>`, recorta a los límites de WhatsApp y guarda el turno en memoria.
+3. **Preparar solicitud LLM**: lee `system_prompt.md`, recupera el historial del número (máx. `CONVERSATION_MAX_MESSAGES`, se reinicia tras `CONVERSATION_TTL_HOURS`) y arma el cuerpo de la petición.
+4. **Ollama (chat local)**: `POST {OLLAMA_URL}/api/chat` (por defecto `http://host.docker.internal:11434`), con tiempo de espera de 5 minutos y un reintento.
+5. **Procesar respuesta**: si Ollama falla responde con un mensaje de cortesía, retira el bloque `<cita>{…}</cita>`, recorta a los límites de WhatsApp y guarda el turno en memoria.
 6. **Enviar respuesta WhatsApp** y, si hubo bloque `<cita>`, **Notificar al estudio** con el JSON de la solicitud.
 
 ### Flujo conversacional (definido en `system_prompt.md`)
@@ -57,14 +59,16 @@ Saludo → filtrado del caso (área, resumen, urgencia, persona natural/empresa)
 ├── system_prompt.md             # Instrucciones y base de conocimiento del asistente
 ├── n8n_workflow_template.json   # Flujo importable en n8n
 ├── docker-compose.yml           # n8n local (puerto 5678, volumen n8n_data)
-├── INSTRUCCIONES_PRUEBAS.md     # Docker + ngrok + webhook de Meta
+├── INSTRUCCIONES_PRUEBAS.md     # Docker + Ollama + ngrok + webhook de Meta (resumen)
+├── GUIA_META_NGROK.md           # Paso a paso detallado de Meta y ngrok
+├── ESTADO_PROYECTO.md           # Estado actual y próximos pasos
 ├── .env.example                 # Variables de entorno
 └── .gitignore
 ```
 
 ## Puesta en marcha
 
-1. **Requisitos**: n8n (≥ 1.x, autoalojado y accesible por HTTPS), una app en Meta for Developers con el producto WhatsApp, y una API key de Anthropic.
+1. **Requisitos**: n8n (≥ 1.x, autoalojado y accesible por HTTPS), una app en Meta for Developers con el producto WhatsApp, y [Ollama](https://ollama.com) instalado en el mismo equipo con el modelo descargado (`ollama pull llama3`).
 2. **Variables**: `cp .env.example .env` y complete los valores.
 3. **Levantar n8n**: para pruebas locales use `docker compose up -d` (ver `INSTRUCCIONES_PRUEBAS.md`), que ya monta `system_prompt.md`. Si usa otro despliegue, monte el archivo en la ruta de `SYSTEM_PROMPT_PATH`. Ejemplo con `docker run`:
    ```bash
