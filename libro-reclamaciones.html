@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Libro de Reclamaciones | J&amp;S</title>
+<meta name="description" content="Libro de Reclamaciones virtual de J&amp;S Estudio Jurídico y Grupo Inmobiliario, conforme a la Ley N.º 29571.">
+<style>
+  :root{
+    --navy:#0e1a2b;
+    --navy-2:#152238;
+    --gold:#c9a227;
+    --gold-light:#e6c65c;
+    --text:#eaeaea;
+    --text-muted:#a9b2c0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#0a1220;color:var(--text);line-height:1.6;}
+  a{color:var(--gold-light);}
+  header{position:sticky;top:0;background:rgba(10,18,32,0.95);backdrop-filter:blur(6px);z-index:100;border-bottom:1px solid rgba(201,162,39,0.25);}
+  .nav{max-width:800px;margin:0 auto;display:flex;align-items:center;gap:10px;padding:14px 20px;}
+  .nav img{height:34px;}
+  .nav .brand-text{font-weight:700;font-size:16px;}
+  main{max-width:800px;margin:0 auto;padding:40px 20px 80px;}
+  h1{font-size:26px;margin-bottom:6px;}
+  .sub{color:var(--text-muted);font-size:13px;margin-bottom:24px;}
+  .provider{background:var(--navy-2);border:1px solid rgba(201,162,39,0.3);border-radius:8px;padding:14px 18px;font-size:13px;color:var(--text-muted);margin-bottom:24px;}
+  .provider strong{color:var(--text);}
+  .pending{color:#f0a35e;font-weight:600;}
+  fieldset{border:1px solid rgba(201,162,39,0.3);border-radius:10px;padding:18px;margin-bottom:20px;}
+  legend{color:var(--gold-light);font-weight:700;padding:0 8px;font-size:15px;}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:600px){.row{grid-template-columns:1fr;}}
+  .field{margin-bottom:14px;}
+  label{font-size:13px;color:var(--text-muted);display:block;margin-bottom:5px;}
+  input,select,textarea{width:100%;background:var(--navy-2);border:1px solid rgba(201,162,39,0.3);border-radius:6px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;}
+  textarea{resize:vertical;min-height:100px;}
+  .radio-group{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:8px;}
+  .radio-group label,.check label{display:flex;gap:8px;align-items:flex-start;color:var(--text);font-size:14px;margin:0;cursor:pointer;}
+  .radio-group input,.check input{width:auto;margin-top:4px;}
+  .hint{font-size:12px;color:var(--text-muted);margin-top:4px;}
+  .defs{font-size:13px;color:var(--text-muted);background:var(--navy-2);border-radius:6px;padding:10px 14px;margin-top:6px;}
+  .defs p{margin-bottom:4px;}
+  .check{margin:12px 0;}
+  .check label{font-size:13px;color:var(--text-muted);}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;}
+  button{background:var(--gold);color:#0a1220;font-weight:700;border:none;padding:12px 24px;border-radius:6px;font-size:14px;cursor:pointer;}
+  button:hover{background:var(--gold-light);}
+  button.secondary{background:transparent;color:var(--gold-light);border:1px solid rgba(201,162,39,0.5);}
+  .legal{font-size:12px;color:var(--text-muted);margin-top:24px;}
+  .legal p{margin-bottom:8px;}
+  #resultado{display:none;background:var(--navy-2);border:1px solid var(--gold);border-radius:10px;padding:18px;margin-top:20px;}
+  #resultado h2{font-size:17px;color:var(--gold-light);margin-bottom:8px;}
+  #resultado p{font-size:13px;color:var(--text-muted);margin-bottom:8px;}
+  #resumen{white-space:pre-wrap;font-family:Consolas,monospace;font-size:12px;color:var(--text);background:#0a1220;border-radius:6px;padding:12px;margin:10px 0;max-height:300px;overflow:auto;}
+  .error{color:#f08a8a;font-size:13px;margin-top:8px;display:none;}
+  footer{border-top:1px solid rgba(201,162,39,0.2);padding:30px 20px;text-align:center;color:var(--text-muted);font-size:13px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="nav">
+    <a href="index.html"><img src="logo.png" alt="J&amp;S"></a>
+    <span class="brand-text">J&amp;S — Estudio Jurídico y Grupo Inmobiliario</span>
+  </div>
+</header>
+
+<main>
+  <h1>📕 Libro de Reclamaciones</h1>
+  <p class="sub">Hoja de Reclamación virtual — Código de Protección y Defensa del Consumidor (Ley N.º 29571)</p>
+
+  <div class="provider">
+    <p><strong>Proveedor:</strong> <span class="pending">[RAZÓN SOCIAL – PENDIENTE]</span> (J&amp;S Estudio Jurídico y Grupo Inmobiliario) · <strong>RUC:</strong> <span class="pending">[RUC – PENDIENTE]</span></p>
+    <p><strong>Domicilio:</strong> Jr. Bolognesi N.º 533, Supe pueblo, Barranca, Lima, Perú · <strong>Correo:</strong> Ejuridicojys@gmail.com</p>
+    <p><strong>Fecha:</strong> <span id="fecha-hoy"></span></p>
+  </div>
+
+  <form id="lr-form" novalidate>
+    <fieldset>
+      <legend>1. Identificación del consumidor reclamante</legend>
+      <div class="field">
+        <label for="lr-nombre">Nombre completo *</label>
+        <input id="lr-nombre" required autocomplete="name">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="lr-tipodoc">Tipo de documento *</label>
+          <select id="lr-tipodoc" required>
+            <option value="DNI">DNI</option>
+            <option value="Carné de extranjería">Carné de extranjería</option>
+            <option value="Pasaporte">Pasaporte</option>
+            <option value="RUC">RUC</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="lr-numdoc">Número de documento *</label>
+          <input id="lr-numdoc" required inputmode="numeric">
+        </div>
+      </div>
+      <div class="field">
+        <label for="lr-domicilio">Domicilio *</label>
+        <input id="lr-domicilio" required autocomplete="street-address">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="lr-telefono">Teléfono *</label>
+          <input id="lr-telefono" type="tel" required autocomplete="tel">
+        </div>
+        <div class="field">
+          <label for="lr-email">Correo electrónico *</label>
+          <input id="lr-email" type="email" required autocomplete="email">
+        </div>
+      </div>
+      <div class="check">
+        <label><input type="checkbox" id="lr-menor"> <span>El reclamante es menor de edad</span></label>
+      </div>
+      <div class="field" id="lr-apoderado-wrap" style="display:none">
+        <label for="lr-apoderado">Nombre del padre, madre o representante legal *</label>
+        <input id="lr-apoderado">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>2. Identificación del bien contratado</legend>
+      <div class="radio-group">
+        <label><input type="radio" name="lr-bien" value="Servicio" checked> Servicio</label>
+        <label><input type="radio" name="lr-bien" value="Producto"> Producto</label>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="lr-area">Área</label>
+          <select id="lr-area">
+            <option>Estudio jurídico</option>
+            <option>Grupo inmobiliario (lotes)</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="lr-monto">Monto reclamado (S/)</label>
+          <input id="lr-monto" inputmode="decimal" placeholder="Opcional">
+        </div>
+      </div>
+      <div class="field">
+        <label for="lr-descbien">Descripción del servicio o producto *</label>
+        <input id="lr-descbien" required placeholder="Ej.: proceso de sucesión intestada / lote en Finca Alborada">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>3. Detalle de la reclamación</legend>
+      <div class="radio-group">
+        <label><input type="radio" name="lr-tipo" value="Reclamo" checked> Reclamo</label>
+        <label><input type="radio" name="lr-tipo" value="Queja"> Queja</label>
+      </div>
+      <div class="defs">
+        <p><strong>Reclamo:</strong> disconformidad relacionada con los productos o servicios adquiridos o contratados.</p>
+        <p><strong>Queja:</strong> disconformidad no relacionada con los productos o servicios, o malestar respecto de la atención al público.</p>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label for="lr-detalle">Detalle *</label>
+        <textarea id="lr-detalle" required></textarea>
+      </div>
+      <div class="field">
+        <label for="lr-pedido">Pedido del consumidor *</label>
+        <textarea id="lr-pedido" required placeholder="¿Qué solicita?"></textarea>
+      </div>
+    </fieldset>
+
+    <div class="check">
+      <label><input type="checkbox" id="lr-acepto" required> <span>He leído la <a href="terminos.html#privacidad" target="_blank">Política de privacidad</a> y acepto que mis datos se usen para atender este reclamo o queja, conforme a la Ley N.º 29733. *</span></label>
+    </div>
+    <div class="check">
+      <label><input type="checkbox" id="lr-veraz" required> <span>Declaro que la información consignada es verdadera. *</span></label>
+    </div>
+
+    <p class="error" id="lr-error">Por favor, complete todos los campos obligatorios (*) y marque las casillas de aceptación.</p>
+
+    <div class="actions">
+      <button type="submit">Generar Hoja de Reclamación</button>
+    </div>
+  </form>
+
+  <div id="resultado" role="status" aria-live="polite">
+    <h2>Hoja de Reclamación N.º <span id="lr-codigo"></span></h2>
+    <p>Para presentarla, envíela por correo con el botón de abajo. Se abrirá su aplicación de correo con el contenido listo. Si no se abre, copie el texto y envíelo a <strong>Ejuridicojys@gmail.com</strong>. Conserve una copia como constancia.</p>
+    <div id="resumen"></div>
+    <div class="actions">
+      <button type="button" id="lr-enviar">Enviar por correo</button>
+      <button type="button" class="secondary" id="lr-copiar">Copiar texto</button>
+      <button type="button" class="secondary" id="lr-imprimir">Imprimir / guardar PDF</button>
+    </div>
+  </div>
+
+  <div class="legal">
+    <p>La formulación del reclamo no impide acudir a otras vías de solución de controversias ni es requisito previo para interponer una denuncia ante el INDECOPI.</p>
+    <p>El proveedor deberá dar respuesta al reclamo en un plazo no mayor a <strong>quince (15) días hábiles</strong> improrrogables.</p>
+    <p>Los datos personales consignados se tratan conforme a nuestra <a href="terminos.html#privacidad">Política de privacidad</a>.</p>
+  </div>
+</main>
+
+<footer>
+  <p><a href="index.html">Inicio</a> · <a href="terminos.html">Términos, privacidad y cookies</a></p>
+  <p>&copy; 2026 J&amp;S Estudio Jurídico y Grupo Inmobiliario</p>
+</footer>
+
+<script>
+const LR_EMAIL = "Ejuridicojys@gmail.com";
+const hoy = new Date();
+const fmt = (d) => d.toLocaleString("es-PE", { timeZone: "America/Lima", dateStyle: "long", timeStyle: "short" });
+document.getElementById("fecha-hoy").textContent = fmt(hoy);
+
+const menor = document.getElementById("lr-menor");
+const apoderadoWrap = document.getElementById("lr-apoderado-wrap");
+const apoderado = document.getElementById("lr-apoderado");
+menor.addEventListener("change", () => {
+  apoderadoWrap.style.display = menor.checked ? "block" : "none";
+  apoderado.required = menor.checked;
+});
+
+const val = (id) => document.getElementById(id).value.trim();
+const radio = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
+let textoHoja = "";
+
+function codigo(d){
+  const p = (n) => String(n).padStart(2, "0");
+  const lima = new Date(d.toLocaleString("en-US", { timeZone: "America/Lima" }));
+  return `LR-${lima.getFullYear()}${p(lima.getMonth() + 1)}${p(lima.getDate())}-${p(lima.getHours())}${p(lima.getMinutes())}${p(lima.getSeconds())}`;
+}
+
+document.getElementById("lr-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const error = document.getElementById("lr-error");
+  if (!form.checkValidity()) { error.style.display = "block"; form.reportValidity(); return; }
+  error.style.display = "none";
+
+  const ahora = new Date();
+  const cod = codigo(ahora);
+  textoHoja =
+`HOJA DE RECLAMACIÓN N.º ${cod}
+Fecha: ${fmt(ahora)}
+Proveedor: J&S Estudio Jurídico y Grupo Inmobiliario — Jr. Bolognesi N.º 533, Supe pueblo, Barranca
+
+1. CONSUMIDOR
+Nombre: ${val("lr-nombre")}
+Documento: ${val("lr-tipodoc")} ${val("lr-numdoc")}
+Domicilio: ${val("lr-domicilio")}
+Teléfono: ${val("lr-telefono")}
+Correo: ${val("lr-email")}${menor.checked ? `\nMenor de edad — Representante: ${val("lr-apoderado")}` : ""}
+
+2. BIEN CONTRATADO
+Tipo: ${radio("lr-bien")}
+Área: ${val("lr-area")}
+Monto reclamado: ${val("lr-monto") ? "S/ " + val("lr-monto") : "—"}
+Descripción: ${val("lr-descbien")}
+
+3. DETALLE
+Tipo: ${radio("lr-tipo")}
+Detalle: ${val("lr-detalle")}
+Pedido: ${val("lr-pedido")}
+
+El consumidor declara que la información es verdadera y acepta el tratamiento de sus datos para la atención de este ${radio("lr-tipo").toLowerCase()}.`;
+
+  document.getElementById("lr-codigo").textContent = cod;
+  document.getElementById("resumen").textContent = textoHoja;
+  const res = document.getElementById("resultado");
+  res.style.display = "block";
+  res.scrollIntoView({ behavior: "smooth" });
+});
+
+document.getElementById("lr-enviar").addEventListener("click", () => {
+  const cod = document.getElementById("lr-codigo").textContent;
+  const asunto = `Libro de Reclamaciones - ${cod}`;
+  window.location.href = `mailto:${LR_EMAIL}?cc=${encodeURIComponent(val("lr-email"))}&subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(textoHoja)}`;
+});
+document.getElementById("lr-copiar").addEventListener("click", async (ev) => {
+  try { await navigator.clipboard.writeText(textoHoja); ev.target.textContent = "Copiado ✓"; }
+  catch (err) { ev.target.textContent = "Seleccione y copie el texto"; }
+});
+document.getElementById("lr-imprimir").addEventListener("click", () => window.print());
+</script>
+
+</body>
+</html>

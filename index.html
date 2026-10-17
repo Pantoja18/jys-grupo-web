@@ -108,6 +108,16 @@
   @media(max-width:700px){.location-block{grid-template-columns:1fr;}}
   .map-frame{border-radius:10px;overflow:hidden;border:1px solid rgba(201,162,39,0.2);height:260px;}
   .map-frame iframe{width:100%;height:100%;border:0;filter:grayscale(0.3) invert(0.92) contrast(0.9);}
+  .map-placeholder{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;background:linear-gradient(135deg,#1a2942,#101a2b);}
+  .map-placeholder p{color:var(--text-muted);font-size:12px;max-width:300px;}
+  .map-placeholder button{background:var(--gold);color:#0a1220;font-weight:700;border:none;padding:10px 22px;border-radius:6px;font-size:14px;cursor:pointer;}
+  .map-placeholder button:hover{background:var(--gold-light);}
+  .consent{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--text-muted);}
+  .consent input{width:auto;margin-top:4px;flex-shrink:0;}
+  .consent a{color:var(--gold-light);text-decoration:underline;}
+  .legal-links{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:8px;}
+  .legal-links a{color:var(--gold-light);}
+  .pending{color:#f0a35e;font-weight:600;}
   .hours-list{list-style:none;font-size:14px;color:var(--text-muted);}
   .hours-list li{padding:6px 0;border-bottom:1px solid rgba(201,162,39,0.15);display:flex;justify-content:space-between;}
   form{display:grid;gap:14px;max-width:520px;margin:0 auto;}
@@ -196,7 +206,10 @@
   <h2>Visítanos en nuestra oficina</h2>
   <div class="location-block">
     <div class="map-frame">
-      <iframe src="https://maps.google.com/maps?q=Jr.%20Bolognesi%20533%2C%20Supe%2C%20Barranca%2C%20Peru&output=embed" title="Ubicación de J&S" loading="lazy"></iframe>
+      <div class="map-placeholder" id="map-placeholder">
+        <button type="button" id="load-map">Ver mapa</button>
+        <p>Al cargar el mapa, Google puede instalar cookies. <a href="terminos.html#cookies" style="color:var(--gold-light)">Más información</a></p>
+      </div>
     </div>
     <div>
       <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px;">Jr. Bolognesi N°533, Supe pueblo, Barranca (frente a la Plaza de Armas)</p>
@@ -242,6 +255,10 @@
           <label for="mensaje">Cuéntanos brevemente tu caso</label>
           <textarea id="mensaje" required></textarea>
         </div>
+        <label class="consent" for="acepto">
+          <input type="checkbox" id="acepto" required>
+          <span>He leído y acepto la <a href="terminos.html#privacidad" target="_blank">Política de privacidad</a>. Autorizo el uso de mis datos para atender mi consulta, conforme a la Ley N.º 29733.</span>
+        </label>
         <button type="submit">Enviar por WhatsApp</button>
       </form>
     </div>
@@ -258,11 +275,17 @@
     <a href="https://www.instagram.com/grupoinmobiliariojys" aria-label="Instagram inmobiliario">ig·inmob</a>
     <a href="https://www.facebook.com/grupoinmobiliariojys" aria-label="Facebook">facebook</a>
   </div>
+  <p><span class="pending">[RAZÓN SOCIAL – PENDIENTE]</span> · RUC <span class="pending">[RUC – PENDIENTE]</span></p>
   <p>&copy; 2026 J&amp;S Estudio Jurídico y Grupo Inmobiliario</p>
-  <p><a href="terminos.html" style="color:var(--gold-light)">Términos y condiciones / Política de privacidad</a></p>
+  <div class="legal-links">
+    <a href="terminos.html#terminos">Términos y condiciones</a>
+    <a href="terminos.html#privacidad">Política de privacidad</a>
+    <a href="terminos.html#cookies">Cookies</a>
+    <a href="libro-reclamaciones.html">📕 Libro de Reclamaciones</a>
+  </div>
 </footer>
 
-<a class="wa-float" href="https://wa.me/51956771681?text=Hola%2C%20quiero%20información" aria-label="Chatea por WhatsApp" title="Chatea por WhatsApp">💬</a>
+<a class="wa-float" href="https://wa.me/51956771681?text=Hola%2C%20quisiera%20agendar%20una%20consulta" target="_blank" rel="noopener" aria-label="Agendar una consulta por WhatsApp" title="Agendar una consulta por WhatsApp">💬</a>
 
 <div class="lightbox" id="lightbox">
   <div class="lightbox-content">
@@ -383,8 +406,17 @@ const statsObserver = new IntersectionObserver((entries) => {
 }, { threshold: 0.5 });
 statEls.forEach(el => statsObserver.observe(el));
 
+document.getElementById("load-map").addEventListener("click", function(){
+  const iframe = document.createElement("iframe");
+  iframe.src = "https://maps.google.com/maps?q=Jr.%20Bolognesi%20533%2C%20Supe%2C%20Barranca%2C%20Peru&output=embed";
+  iframe.title = "Ubicación de J&S";
+  iframe.loading = "lazy";
+  document.getElementById("map-placeholder").replaceWith(iframe);
+});
+
 document.getElementById("contact-form").addEventListener("submit", function(e){
   e.preventDefault();
+  if (!document.getElementById("acepto").checked) { this.reportValidity(); return; }
   const nombre = document.getElementById("nombre").value;
   const telefono = document.getElementById("telefono").value;
   const motivo = document.getElementById("motivo").value;
