@@ -101,5 +101,6 @@ Pendientes (en este orden):
 4. Token permanente de Meta (usuario del sistema); hoy es temporal (24 h).
 5. Antes de unir a `main`: en Cloudflare Pages, Build command `bash build.sh` y Build output directory `dist`. Si no, se publicarían `/whatsapp-bot/...` y `/crm/...`.
 6. Confirmar el número de derivación de la línea inmobiliaria (hoy 956 771 681, que en la web figura como el WhatsApp jurídico).
-7. Producción: validar la firma `X-Hub-Signature-256` con `META_APP_SECRET`; mover la memoria a Redis/Postgres; debounce de mensajes seguidos; plantillas de Meta fuera de la ventana de 24 h.
-8. Sincronizar la base de conocimiento cuando cambie la web (hoy es manual).
+7. Producción: validar la firma `X-Hub-Signature-256` con `META_APP_SECRET`; mover la memoria a Redis/Postgres; plantillas de Meta fuera de la ventana de 24 h.
+8. **Agrupar mensajes seguidos (debounce) → Fase 3 con PostgreSQL.** No se implementó en n8n porque no es confiable: el static data se carga al iniciar cada ejecución y se guarda completo al terminar, sin bloqueo; ejecuciones simultáneas no comparten cambios y la última sobrescribe. Requiere una cola por número en PostgreSQL (bloqueo de fila). El mismo problema puede hacer que una respuesta lenta del LLM sobrescriba un cambio de consentimiento hecho mientras tanto: también se resuelve al mover `consents` a PostgreSQL.
+9. Sincronizar la base de conocimiento cuando cambie la web (hoy es manual).
