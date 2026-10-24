@@ -53,7 +53,7 @@ ngrok (dominio estático HTTPS) ──► n8n en Docker (localhost:5678, contene
 - Webhook: `WEBHOOK_VERIFY_TOKEN`, `WEBHOOK_URL` (URL https de ngrok terminada en `/`).
 - n8n: `N8N_ENCRYPTION_KEY` (no cambiarla una vez creadas credenciales).
 - LLM: `LLM_PROVIDER` (`ollama` | `anthropic`; por defecto `ollama`).
-- Ollama: `OLLAMA_URL=http://host.docker.internal:11434`, `OLLAMA_MODEL=llama3:latest` (candidatos: `qwen2.5:7b`, `llama3.1:8b`), `OLLAMA_NUM_CTX=8192` (no bajarlo: el system prompt ocupa ~4.400 tokens y con menos contexto el modelo pierde las reglas), `OLLAMA_NUM_PREDICT`, `OLLAMA_TEMPERATURE`, `OLLAMA_KEEP_ALIVE`.
+- Ollama: `OLLAMA_URL=http://host.docker.internal:11434`, `OLLAMA_MODEL=llama3:latest` (candidatos: `qwen2.5:7b`, `llama3.1:8b`), `OLLAMA_NUM_CTX=8192` (no bajarlo: el system prompt ocupa ~4.400 tokens y con menos contexto el modelo pierde las reglas), `OLLAMA_NUM_PREDICT=200` (respuestas de máx. 2 oraciones; el resumen + `<cita>` ocupa ~150 tokens), `OLLAMA_TEMPERATURE`, `OLLAMA_KEEP_ALIVE`.
 - Otras: `CONVERSATION_MAX_MESSAGES`, `CONVERSATION_TTL_HOURS`, `BUSINESS_TIMEZONE=America/Lima`, `FIRM_NOTIFICATION_WEBHOOK_URL`.
 - Anthropic (solo con `LLM_PROVIDER=anthropic`): `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL=claude-sonnet-5-5`, `ANTHROPIC_MAX_TOKENS=8000`, `ANTHROPIC_EFFORT=low`.
 

@@ -354,7 +354,7 @@ def main(argv=None) -> int:
     ap.add_argument("--casos", nargs="+", help="solo estos casos (por ejemplo: 4 5 6)")
     ap.add_argument("--prompt", type=Path, default=DEFAULT_PROMPT)
     ap.add_argument("--num-ctx", type=int, default=8192)
-    ap.add_argument("--num-predict", type=int, default=512)
+    ap.add_argument("--num-predict", type=int, default=200)  # igual que OLLAMA_NUM_PREDICT en n8n
     ap.add_argument("--temperatura", type=float, default=0.3)
     ap.add_argument("--timeout", type=float, default=300)
     args = ap.parse_args(argv)

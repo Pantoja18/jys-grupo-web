@@ -84,6 +84,7 @@ test('Ollama por defecto: system prompt completo (con recordatorio) y contexto d
   assert.strictEqual(b.model, 'llama3:latest');
   assert.strictEqual(b.stream, false);
   assert.strictEqual(b.options.num_ctx, 8192);
+  assert.strictEqual(b.options.num_predict, 200);
   assert.strictEqual(b.messages[0].role, 'system');
   assert.ok(b.messages[0].content.includes('## Recordatorio final'));
   assert.ok(b.messages[0].content.includes('## Trato de "Usted"'));
