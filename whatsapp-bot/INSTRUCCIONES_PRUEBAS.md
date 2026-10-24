@@ -59,12 +59,12 @@ Envíe un WhatsApp al número de prueba desde un número registrado como destina
 
 **Repetir una prueba desde cero:** ponga su número en `TEST_NUMBERS` del `.env` (con código de país, p. ej. `51XXXXXXXXX`; varios separados por comas), aplique con `docker compose up -d --force-recreate` y escriba `/reiniciar` por WhatsApp. Valeria responde *"Conversación reiniciada."* y olvida el historial y el consentimiento de ese número. Desde otros números, `/reiniciar` se trata como un mensaje normal.
 
-## Pasar del flujo v2 al v3 (consentimiento con botones y citas cifradas)
+## Pasar al flujo v3.1 (consentimiento con botones y citas cifradas llevadas por n8n)
 
 1. Agregue al `.env` las variables del Paso 1 y aplique: `docker compose up -d --force-recreate` (también monta la carpeta `datos/`).
-2. En n8n: *Workflows → Import from File* → `n8n_workflow_template.json`. Se crea **"JS CONSULTORES Y ABOGADOS - Valeria v3 (consentimiento y citas)"**.
-3. Abra el v2 y **desactívelo** (solo un flujo puede atender `/webhook/whatsapp`); luego abra el v3 y **actívelo / publíquelo**.
-4. En el v3, *Settings* debe mostrar *Save successful production executions: Do not save* y *Save manual executions: No* (vienen así en la plantilla).
+2. En n8n: *Workflows → Import from File* → `n8n_workflow_template.json`. Se crea **"JS CONSULTORES Y ABOGADOS - Valeria v3.1 (consentimiento y citas)"**.
+3. Abra el flujo anterior (v2 o v3) y **desactívelo** (solo un flujo puede atender `/webhook/whatsapp`); luego abra el v3.1 y **actívelo / publíquelo**.
+4. En el v3.1, *Settings* debe mostrar *Save successful production executions: Do not save* y *Save manual executions: No* (vienen así en la plantilla).
 
 **Batería por WhatsApp del v3** (con datos ficticios; empiece con `/reiniciar`):
 
@@ -74,8 +74,10 @@ Envíe un WhatsApp al número de prueba desde un número registrado como destina
 | 2 | `Quiero una cita` | Al instante, el mensaje fijo de consentimiento con botones **Acepto / No acepto** (sin IA) |
 | 3 | Pulse **No acepto** | "Entendido, no usaremos sus datos…" con los canales directos; no pide datos |
 | 4 | `Quiero una cita` → **Acepto** | "Gracias, hemos registrado su autorización. ¿Me indica su nombre completo…?" |
-| 5 | Nombre, tema, modalidad, día, correo | Un dato por mensaje y un resumen como **solicitud** |
-| 6 | `python herramientas/ver_citas.py --env-file .env` | La solicitud aparece en la tabla |
+| 5 | Nombre, tema, modalidad (botones **Presencial / Virtual**), día, correo (o **Sin correo**) | n8n pregunta un dato por mensaje, al instante y sin IA, y cierra con "Su *solicitud* de cita quedó registrada…" |
+| 6 | `python herramientas/ver_citas.py --env-file .env` | La solicitud aparece en la tabla (se guarda aunque el modelo no escriba `<cita>`) |
+| 6b | En medio de la cita: `¿Atienden sábados?` | Responde la IA y vuelve a preguntar el dato pendiente |
+| 6c | `Quiero una cita` → `cancelar` | "Entendido, dejé sin efecto la solicitud de cita…" |
 | 7 | `/reiniciar` | "Conversación reiniciada." (solo desde `TEST_NUMBERS`) |
 
 ## Comparar modelos de Ollama (Fase 0)
@@ -120,6 +122,12 @@ Para detener: `docker compose down` (los datos se conservan en el volumen). Para
 - **Valeria responde con el mensaje de disculpa:** Ollama no está corriendo, el contenedor no lo alcanza (ver Paso 2) o falta `ollama pull llama3`. Revise el error del nodo *Ollama (chat local)* en n8n → *Executions*.
 - **Respuestas lentas:** en CPU, Llama 3 puede tardar decenas de segundos por mensaje; la primera respuesta es más lenta porque carga el modelo. Use `OLLAMA_NUM_PREDICT=200` (ver README → *Velocidad*). El indicador *escribiendo…* dura como máximo 25 s.
 - **No aparece "escribiendo…":** revise el error del nodo *Indicador escribiendo* en n8n; según Meta, requiere un token de sistema o de empresa. Si falla, Valeria responde igual.
-- **La cita no aparece en `ver_citas.py`:** solo se guarda con consentimiento otorgado y si `CITAS_FILE_KEY` tiene 64 caracteres hex; el log de n8n (`docker compose logs n8n`) muestra `[Guardar cita cifrada] ...` con el motivo.
+- **La cita no aparece en `ver_citas.py`:** solo se guarda con consentimiento otorgado y si `CITAS_FILE_KEY` tiene 64 caracteres hex; el log de n8n (`docker compose logs n8n`) muestra `[Guardar cita cifrada] ...` con el motivo. Si no hay ese mensaje en el log, revise que esté activo el flujo **v3.1** (en el v3 el guardado dependía del bloque `<cita>` del modelo). Comprobar el montaje desde PowerShell:
+  ```powershell
+  docker inspect js-consultores-n8n --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}'   # debe incluir ...\datos -> /data/datos
+  docker exec js-consultores-n8n sh -c 'echo $CITAS_FILE_PATH; echo largo de la clave: ${#CITAS_FILE_KEY}; ls -la /data/datos'
+  docker exec js-consultores-n8n sh -c 'touch /data/datos/.prueba && echo se puede escribir && rm /data/datos/.prueba'
+  docker compose logs n8n | Select-String 'Guardar cita'
+  ```
 - **No llega el aviso al estudio por WhatsApp:** fuera de la ventana de 24 h Meta no entrega mensajes libres, y el número de prueba solo envía a destinatarios verificados.
 - **Cambios en `system_prompt.md`:** se aplican en el siguiente mensaje, sin reiniciar.

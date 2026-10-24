@@ -13,15 +13,24 @@ const { wf, nodes, runCode, evalParam } = require('./nodos_n8n');
 const INPUT = { from: '51900000000', messageId: 'wamid.T1', contactName: 'Prueba', phoneNumberId: '100', text: 'Hola', buttonId: '', needsAI: true, directReply: '' };
 const POLICY = { POLICY_VERSION: '2026-10' };
 
-// Puerta de consentimiento → (si va a la IA) Preparar solicitud LLM.
+// Puerta de consentimiento → Estado de la cita → (si va a la IA) Preparar solicitud LLM.
 function gate(input = {}, store = {}, env = {}) {
   return runCode('Puerta de consentimiento', { input: { ...INPUT, ...input }, env: { ...POLICY, ...env }, store })[0].json;
 }
 
+function route(input = {}, store = {}, env = {}) {
+  return runCode('Estado de la cita', { input: gate(input, store, env), env: { ...POLICY, ...env }, store })[0].json;
+}
+
 function prepare(env = {}, store = {}, input = {}) {
-  const g = gate(input, store, env);
-  assert.strictEqual(g.action, 'llm', `la puerta no envió el mensaje a la IA: ${g.reply}`);
-  return runCode('Preparar solicitud LLM', { input: { success: true }, env: { ...POLICY, ...env }, store, refs: { 'Puerta de consentimiento': g } })[0].json;
+  const g = route(input, store, env);
+  assert.strictEqual(g.action, 'llm', `el mensaje no fue a la IA: ${g.reply}`);
+  return runCode('Preparar solicitud LLM', { input: { success: true }, env: { ...POLICY, ...env }, store, refs: { 'Estado de la cita': g } })[0].json;
+}
+
+// Último nodo antes de enviar: guarda la cita (si hay) y ajusta la respuesta.
+function finish(json, store, env = {}) {
+  return runCode('Guardar cita cifrada', { input: json, env: { ...POLICY, ...env }, store })[0].json;
 }
 
 const granted = () => ({ consents: { [INPUT.from]: { estado: 'otorgado', fecha: '2026-10-24T12:00:00.000Z', version: '2026-10', canal: 'whatsapp_botones' } } });
@@ -190,12 +199,13 @@ const CONSENT_TEXT = 'Para gestionar su cita necesitamos usar algunos datos pers
 
 test('la puerta va antes de la IA y las respuestas fijas no pasan por el LLM', () => {
   assert.strictEqual(wf.connections['Extraer mensaje'].main[0][0].node, 'Puerta de consentimiento');
-  assert.strictEqual(wf.connections['Puerta de consentimiento'].main[0][0].node, '¿Llamar a la IA?');
+  assert.strictEqual(wf.connections['Puerta de consentimiento'].main[0][0].node, 'Estado de la cita');
+  assert.strictEqual(wf.connections['Estado de la cita'].main[0][0].node, '¿Llamar a la IA?');
   const cond = nodes['¿Llamar a la IA?'].parameters.conditions.conditions[0];
   assert.strictEqual(cond.leftValue, '={{ $json.action }}');
   assert.strictEqual(cond.rightValue, 'llm');
   const outs = wf.connections['¿Llamar a la IA?'].main;
-  assert.strictEqual(outs[1][0].node, 'Enviar respuesta WhatsApp');
+  assert.strictEqual(outs[1][0].node, 'Guardar cita cifrada');
   assert.ok(nodes['Enviar respuesta WhatsApp'].parameters.jsonBody.includes('...$json.waMessage'));
 });
 
@@ -345,16 +355,21 @@ function decryptLine(line, keyHex = KEY) {
 function saveCita(appointment, { store = granted(), env = {} } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'citas-'));
   const file = path.join(dir, 'sub', 'citas.jsonl.enc');
-  const input = { from: INPUT.from, phoneNumberId: '100', appointment, consentStatus: 'otorgado', policyVersion: '2026-10' };
+  const input = { from: INPUT.from, phoneNumberId: '100', appointment, hasAppointment: true, consentStatus: 'otorgado', policyVersion: '2026-10', provider: 'ollama', reply: 'Gracias.', waMessage: { type: 'text', text: { body: 'Gracias.' } } };
   const run = () => runCode('Guardar cita cifrada', { input, store, env: { CITAS_FILE_KEY: KEY, CITAS_FILE_PATH: file, ...env } })[0].json;
   return { run, file, store };
 }
 const fs = require('fs');
 const path = require('path');
 
-test('el flujo guarda la cita cifrada solo si "¿Solicitud de cita?" es verdadero', () => {
-  assert.deepStrictEqual(wf.connections['¿Solicitud de cita?'].main[0].map((c) => c.node), ['Guardar cita cifrada']);
-  assert.deepStrictEqual(wf.connections['Guardar cita cifrada'].main[0].map((c) => c.node).sort(), ['¿Avisar por WhatsApp?', '¿Webhook configurado?']);
+test('todas las respuestas pasan por "Guardar cita cifrada" antes de enviarse', () => {
+  assert.ok(!nodes['¿Solicitud de cita?'], 'el guardado ya no depende de un IF sobre <cita>');
+  assert.deepStrictEqual(wf.connections['Procesar respuesta'].main[0].map((c) => c.node), ['Guardar cita cifrada']);
+  assert.deepStrictEqual(wf.connections['¿Llamar a la IA?'].main[1].map((c) => c.node), ['Guardar cita cifrada']);
+  assert.deepStrictEqual(wf.connections['Guardar cita cifrada'].main[0].map((c) => c.node).sort(), ['Enviar respuesta WhatsApp', '¿Avisar por WhatsApp?', '¿Webhook configurado?']);
+  for (const [src, conn] of Object.entries(wf.connections)) {
+    if (src !== 'Guardar cita cifrada') assert.ok(!conn.main.flat().some((c) => c.node === 'Enviar respuesta WhatsApp'), src);
+  }
   assert.strictEqual(wf.connections['¿Avisar por WhatsApp?'].main[0][0].node, 'Avisar al estudio (WhatsApp)');
   assert.strictEqual(wf.connections['¿Webhook configurado?'].main[0][0].node, 'Notificar al estudio (cita)');
   for (const n of ['Avisar al estudio (WhatsApp)', 'Notificar al estudio (cita)']) assert.strictEqual(nodes[n].onError, 'continueRegularOutput');
@@ -382,7 +397,7 @@ test('la misma cita no se guarda dos veces; una cita actualizada sí', () => {
   const { run, file, store } = saveCita(JSON.parse(CITA));
   assert.strictEqual(run().saved, true);
   assert.strictEqual(run().duplicate, true);
-  const r = runCode('Guardar cita cifrada', { input: { from: INPUT.from, appointment: { ...JSON.parse(CITA), correo: 'm@example.com' } }, store, env: { CITAS_FILE_KEY: KEY, CITAS_FILE_PATH: file } })[0].json;
+  const r = runCode('Guardar cita cifrada', { input: { from: INPUT.from, hasAppointment: true, appointment: { ...JSON.parse(CITA), correo: 'm@example.com' } }, store, env: { CITAS_FILE_KEY: KEY, CITAS_FILE_PATH: file } })[0].json;
   assert.strictEqual(r.saved, true);
   assert.strictEqual(fs.readFileSync(file, 'utf8').trim().split('\n').length, 2);
 });
@@ -413,12 +428,228 @@ test('sin CITAS_FILE_KEY válida no se escribe nada y el aviso lo advierte', () 
   assert.ok(r.notice.includes('no se pudo guardar'));
 });
 
+// ---------- Estado de la cita (n8n lleva la solicitud, sin depender de <cita>) ----------
+
+// Un turno completo sin IA: puerta → estado → guardar. Falla si el mensaje fuera al LLM.
+function turn(text, store, { buttonId = '', env = {} } = {}) {
+  const r = route({ text, buttonId }, store, env);
+  assert.strictEqual(r.action, 'reply', `"${text}" fue a la IA`);
+  return finish(r, store, env);
+}
+function citaEnv() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flujo-'));
+  return { CITAS_FILE_KEY: KEY, CITAS_FILE_PATH: path.join(dir, 'citas.jsonl.enc') };
+}
+const lines = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean) : []);
+const body = (r) => (r.waMessage.type === 'interactive' ? r.waMessage.interactive.body.text : r.waMessage.text.body);
+
+test('flujo completo sin la IA: consentimiento → nombre → tema → modalidad → horario → correo → cita cifrada', () => {
+  const env = citaEnv();
+  const store = {};
+  assert.strictEqual(turn('Quiero una cita', store, { env }).waMessage.type, 'interactive');
+  let r = turn('Acepto', store, { buttonId: 'consent_si', env });
+  assert.strictEqual(r.reply, 'Gracias, hemos registrado su autorización. ¿Me indica su nombre completo, por favor?');
+  r = turn('Ana Torres Vega', store, { env });
+  assert.ok(r.reply.includes('tema de su consulta'), r.reply);
+  r = turn('Quiero iniciar una demanda de pensión de alimentos', store, { env });
+  assert.deepStrictEqual(r.waMessage.interactive.action.buttons.map((b) => b.reply.id), ['cita_presencial', 'cita_virtual']);
+  r = turn('Presencial', store, { buttonId: 'cita_presencial', env });
+  assert.ok(r.reply.includes('¿Qué día y en qué horario'), r.reply);
+  r = turn('El martes por la mañana', store, { env });
+  assert.ok(r.reply.includes('correo'), r.reply);
+  assert.strictEqual(lines(env.CITAS_FILE_PATH).length, 0, 'todavía no se guarda');
+  r = turn('ana@example.com', store, { env });
+
+  assert.strictEqual(r.saved, true);
+  assert.strictEqual(r.origen, 'flujo');
+  assert.ok(r.reply.startsWith('Su *solicitud* de cita quedó registrada: Ana Torres Vega'), r.reply);
+  assert.ok(r.reply.includes('presencial') && r.reply.includes('El martes por la mañana'));
+  const recs = lines(env.CITAS_FILE_PATH).map((l) => decryptLine(l));
+  assert.strictEqual(recs.length, 1);
+  assert.deepStrictEqual(
+    [recs[0].nombre, recs[0].area, recs[0].modalidad, recs[0].preferencia_horaria, recs[0].correo, recs[0].estado, recs[0].origen],
+    ['Ana Torres Vega', 'Procesos de alimentos', 'presencial', 'El martes por la mañana', 'ana@example.com', 'completa', 'flujo']);
+  assert.strictEqual(recs[0].consentimiento.estado, 'otorgado');
+  assert.strictEqual(store.citaFlow[INPUT.from].estado, 'registrada');
+  // El historial guarda los turnos fijos, para que la IA conozca la conversación.
+  assert.strictEqual(store.conversations[INPUT.from].messages.at(-1).content, r.reply);
+  // Después del registro, lo demás vuelve a la IA, que sabe que la solicitud ya está registrada.
+  const ctx = prepare({}, store, { text: '¿Dónde queda su oficina?' });
+  assert.ok(ctx.llmBody.messages[0].content.includes('Solicitud de cita: registrada'));
+});
+
+test('no vuelve a pedir datos ya dados (modalidad en el primer mensaje, correo junto al tema)', () => {
+  const env = citaEnv();
+  const store = granted();
+  let r = turn('Quiero una cita virtual', store, { env });
+  assert.ok(r.reply.includes('nombre completo'));
+  r = turn('Me llamo Luis Rojas', store, { env });
+  r = turn('Herencia de mi padre, sin testamento. Mi correo es luis@example.com', store, { env });
+  assert.ok(r.reply.includes('¿Qué día'), `no debía preguntar la modalidad: ${r.reply}`);
+  r = turn('jueves en la tarde', store, { env });
+  assert.strictEqual(r.saved, true, `no debía preguntar el correo: ${r.reply}`);
+  const rec = decryptLine(lines(env.CITAS_FILE_PATH)[0]);
+  assert.deepStrictEqual([rec.nombre, rec.modalidad, rec.correo, rec.area], ['Luis Rojas', 'virtual', 'luis@example.com', 'Sucesión intestada']);
+});
+
+test('correo opcional: el botón "Sin correo" o un "no" cierran la solicitud', () => {
+  for (const [text, buttonId] of [['Sin correo', 'cita_sin_correo'], ['No, gracias', '']]) {
+    const env = citaEnv();
+    const store = granted();
+    for (const m of ['Quiero agendar una cita', 'Rosa Díaz', 'Un contrato de alquiler', 'virtual', 'lunes 10 am']) turn(m, store, { env });
+    const r = turn(text, store, { buttonId, env });
+    assert.strictEqual(r.saved, true, text);
+    assert.strictEqual(decryptLine(lines(env.CITAS_FILE_PATH)[0]).correo, '');
+  }
+});
+
+test('respuesta no válida: vuelve a preguntar el mismo dato (con los botones de modalidad)', () => {
+  const store = granted();
+  const env = citaEnv();
+  for (const m of ['Quiero una cita', 'Rosa Díaz', 'Tenencia de mi hijo']) turn(m, store, { env });
+  const r = turn('no sé', store, { env });
+  assert.ok(r.reply.startsWith('Disculpe, no le entendí.'), r.reply);
+  assert.strictEqual(r.waMessage.type, 'interactive');
+  assert.strictEqual(turn('ok', store, { env: citaEnv() }).waMessage.type, 'interactive');
+});
+
+test('una duda en medio de la solicitud va a la IA, que sabe qué falta; luego se repite la pregunta', () => {
+  const store = granted();
+  const env = citaEnv();
+  for (const m of ['Quiero una cita', 'Rosa Díaz', 'Tenencia de mi hijo']) turn(m, store, { env });
+  const r = route({ text: '¿Cuánto cuesta la consulta?' }, store, env);
+  assert.strictEqual(r.action, 'llm');
+  const ctx = prepare(env, store, { text: '¿Cuánto cuesta la consulta?' });
+  assert.ok(/Solicitud de cita: en curso .*falta: modalidad/.test(ctx.llmBody.messages[0].content));
+  const out = runCode('Procesar respuesta', { input: { message: { content: 'El costo se lo indicará el equipo del estudio.' } }, store, refs: { 'Preparar solicitud LLM': ctx } })[0].json;
+  const f = finish(out, store, env);
+  assert.strictEqual(f.reply, 'El costo se lo indicará el equipo del estudio.\n\n¿Prefiere una cita presencial en nuestra oficina o virtual?');
+  assert.strictEqual(store.conversations[INPUT.from].messages.at(-1).content, f.reply);
+  // La siguiente respuesta se toma como la modalidad.
+  assert.ok(turn('presencial', store, { env }).reply.includes('¿Qué día'));
+});
+
+test('si no se pudo guardar, el mensaje NO dice "registrada" y da los canales directos', () => {
+  const store = granted();
+  const env = { CITAS_FILE_KEY: 'corta', CITAS_FILE_PATH: citaEnv().CITAS_FILE_PATH, FIRM_NOTIFY_WHATSAPP: '51900000001' };
+  for (const m of ['Quiero una cita', 'Rosa Díaz', 'Tenencia de mi hijo', 'virtual', 'viernes 4 pm']) turn(m, store, { env });
+  const r = turn('no', store, { env });
+  assert.strictEqual(r.saved, false);
+  assert.ok(!/registrad/i.test(r.reply), r.reply);
+  assert.ok(r.reply.includes('956 771 681'));
+  assert.strictEqual(body(r), r.reply);
+  assert.strictEqual(store.conversations[INPUT.from].messages.at(-1).content, r.reply);
+  assert.strictEqual(store.citaFlow[INPUT.from].estado, 'fallida');
+  assert.ok(r.notifyWhatsApp && r.notice.includes('no se pudo guardar'), 'el estudio recibe el aviso');
+});
+
+test('la IA dice "registrada" sin bloque <cita> y sin guardar nada: no se le dice eso al usuario', () => {
+  const env = citaEnv();
+  // Sin solicitud en curso.
+  let store = granted();
+  let { out } = parse({ message: { content: 'Su solicitud de cita quedó registrada; el equipo le confirmará.' } }, 'ollama', store);
+  let f = finish(out, store, env);
+  assert.strictEqual(f.saved, false);
+  assert.ok(f.reply.startsWith('Aún no he registrado su solicitud de cita.'), f.reply);
+  assert.ok(!/quedó registrada/.test(store.conversations[INPUT.from].messages.at(-1).content));
+  // Con una solicitud en curso: se vuelve a pedir el dato pendiente.
+  store = granted();
+  for (const m of ['Quiero una cita', 'Rosa Díaz']) turn(m, store, { env });
+  const ctx = prepare(env, store, { text: '¿Atienden sábados?' });
+  out = runCode('Procesar respuesta', { input: { message: { content: 'Listo, su cita está agendada para el sábado.' } }, store, refs: { 'Preparar solicitud LLM': ctx } })[0].json;
+  f = finish(out, store, env);
+  assert.strictEqual(f.reply, 'Aún no he registrado su solicitud de cita. ¿Podría contarme en una frase el tema de su consulta?');
+  assert.strictEqual(lines(env.CITAS_FILE_PATH).length, 0);
+  // "hemos registrado su autorización" no es una cita: no se toca.
+  store = granted();
+  ({ out } = parse({ message: { content: 'Ya hemos registrado su autorización. ¿En qué puedo ayudarle?' } }, 'ollama', store));
+  assert.strictEqual(finish(out, store, env).reply, 'Ya hemos registrado su autorización. ¿En qué puedo ayudarle?');
+});
+
+test('respaldo: el bloque <cita> de la IA se guarda (origen "ia") si el flujo no registró la cita', () => {
+  const env = citaEnv();
+  const store = granted();
+  const { out } = parse({ message: { content: `Su solicitud de cita quedó registrada.\n<cita>${CITA}</cita>` } }, 'ollama', store);
+  const f = finish(out, store, env);
+  assert.strictEqual(f.saved, true);
+  assert.strictEqual(f.origen, 'ia');
+  assert.strictEqual(f.reply, 'Su solicitud de cita quedó registrada.');
+  assert.strictEqual(decryptLine(lines(env.CITAS_FILE_PATH)[0]).origen, 'ia');
+});
+
+test('respaldo: con una solicitud en curso, los datos del bloque <cita> completan lo que falta', () => {
+  const env = citaEnv();
+  const store = granted();
+  for (const m of ['Quiero una cita', 'María Pérez Ríos']) turn(m, store, { env });
+  const ctx = prepare(env, store, { text: '¿Atienden los sábados?' });
+  const incompleta = CITA.replace('"completa"', '"incompleta"');
+  const out = runCode('Procesar respuesta', { input: { message: { content: `Tramitamos demandas de pensión.\n<cita>${incompleta}</cita>` } }, store, refs: { 'Preparar solicitud LLM': ctx } })[0].json;
+  finish(out, store, env);
+  const d = store.citaFlow[INPUT.from].datos;
+  assert.deepStrictEqual([d.tema, d.modalidad, d.horario], ['x', 'presencial', 'martes']);
+  assert.strictEqual(store.citaFlow[INPUT.from].estado, 'en_curso');
+});
+
+test('después de registrar en el flujo, un <cita> repetido de la IA no se vuelve a guardar', () => {
+  const env = citaEnv();
+  const store = granted();
+  for (const m of ['Quiero una cita', 'Rosa Díaz', 'Tenencia de mi hijo', 'virtual', 'viernes 4 pm', 'no']) turn(m, store, { env });
+  assert.strictEqual(lines(env.CITAS_FILE_PATH).length, 1);
+  const { out } = parse({ message: { content: `Gracias, su solicitud quedó registrada.\n<cita>${CITA}</cita>` } }, 'ollama', store);
+  const f = finish(out, store, env);
+  assert.strictEqual(lines(env.CITAS_FILE_PATH).length, 1);
+  assert.strictEqual(f.reply, 'Gracias, su solicitud quedó registrada.', 'ya está registrada: el mensaje es cierto');
+});
+
+test('si la IA pidió el nombre, n8n toma el relevo con la respuesta', () => {
+  const store = granted();
+  store.conversations = { [INPUT.from]: { updatedAt: Date.now(), messages: [
+    { role: 'user', content: 'Tengo un problema con un terreno' }, { role: 'assistant', content: 'Con gusto le ayudo. ¿Me indica su nombre completo, por favor?' },
+  ] } };
+  const r = turn('Carlos Mendoza', store, { env: citaEnv() });
+  assert.ok(r.reply.includes('tema de su consulta'), r.reply);
+  assert.strictEqual(store.citaFlow[INPUT.from].datos.nombre, 'Carlos Mendoza');
+  // Una pregunta general de la IA no inicia una solicitud.
+  const other = granted();
+  other.conversations = { [INPUT.from]: { updatedAt: Date.now(), messages: [
+    { role: 'user', content: 'Hola' }, { role: 'assistant', content: '¿En qué puedo ayudarle con su caso?' },
+  ] } };
+  assert.strictEqual(route({ text: 'Quiero saber de herencias' }, other).action, 'llm');
+  assert.ok(!other.citaFlow[INPUT.from]);
+});
+
+test('cancelar, rechazar el consentimiento o /reiniciar borran la solicitud en curso', () => {
+  let store = granted();
+  for (const m of ['Quiero una cita', 'Rosa Díaz']) turn(m, store, { env: citaEnv() });
+  assert.ok(turn('cancelar', store).reply.startsWith('Entendido, dejé sin efecto'));
+  assert.ok(!store.citaFlow[INPUT.from]);
+
+  store = granted();
+  for (const m of ['Quiero una cita', 'Rosa Díaz']) turn(m, store, { env: citaEnv() });
+  const r = turn('No acepto', store, { buttonId: 'consent_no' });
+  assert.ok(r.reply.includes('no usaremos sus datos personales'));
+  assert.ok(!store.citaFlow[INPUT.from], 'sin consentimiento no se conservan los datos de la cita');
+
+  store = granted();
+  for (const m of ['Quiero una cita', 'Rosa Díaz']) turn(m, store, { env: citaEnv() });
+  turn('/reiniciar', store, { env: { TEST_NUMBERS: INPUT.from } });
+  assert.ok(!store.citaFlow[INPUT.from]);
+});
+
+test('sin consentimiento no hay solicitud en curso ni se guarda nada', () => {
+  const store = {};
+  const r = route({ text: 'Quiero una cita' }, store);
+  assert.strictEqual(r.waMessage.interactive.body.text, CONSENT_TEXT);
+  assert.ok(!store.citaFlow || !store.citaFlow[INPUT.from]);
+  assert.strictEqual(finish(r, store, citaEnv()).saved, false);
+});
+
 // ---------- Indicador "escribiendo…" ----------
 
 test('indicador de escritura: solo en el camino a la IA, antes de Preparar solicitud LLM', () => {
   assert.strictEqual(wf.connections['¿Llamar a la IA?'].main[0][0].node, 'Indicador escribiendo');
   assert.strictEqual(wf.connections['Indicador escribiendo'].main[0][0].node, 'Preparar solicitud LLM');
-  assert.strictEqual(wf.connections['¿Llamar a la IA?'].main[1][0].node, 'Enviar respuesta WhatsApp');
+  assert.strictEqual(wf.connections['¿Llamar a la IA?'].main[1][0].node, 'Guardar cita cifrada');
 });
 
 test('indicador de escritura: formato de Meta (status "read" + typing_indicator) y nunca bloquea', () => {
@@ -436,8 +667,8 @@ test('indicador de escritura: formato de Meta (status "read" + typing_indicator)
 });
 
 test('si el indicador falla, Preparar solicitud LLM usa igual los datos de la puerta', () => {
-  const g = gate({ text: 'Hola' });
-  const ctx = runCode('Preparar solicitud LLM', { input: { error: { message: '(#131000) Something went wrong' } }, env: POLICY, store: {}, refs: { 'Puerta de consentimiento': g } })[0].json;
+  const g = route({ text: 'Hola' });
+  const ctx = runCode('Preparar solicitud LLM', { input: { error: { message: '(#131000) Something went wrong' } }, env: POLICY, store: {}, refs: { 'Estado de la cita': g } })[0].json;
   assert.strictEqual(ctx.from, INPUT.from);
   assert.ok(ctx.llmBody.messages.at(-1).content.endsWith('Hola'));
 });
