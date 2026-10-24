@@ -451,6 +451,30 @@ test('Enviar respuesta WhatsApp arma texto o interactivo y usa la línea entrant
   assert.strictEqual(evalParam(n.parameters.url, { $json: g, $env: { META_API_VERSION: 'v25.0' } }), 'https://graph.facebook.com/v25.0/300/messages');
 });
 
+// ---------- /reiniciar (solo números de prueba) ----------
+
+test('/reiniciar desde un número de TEST_NUMBERS borra historial, consentimiento y control de citas', () => {
+  const store = { ...granted(), conversations: { [INPUT.from]: { updatedAt: Date.now(), messages: [{ role: 'user', content: 'Hola' }] } }, citas: { [INPUT.from]: { hash: 'x', notified: true, updatedAt: Date.now() } } };
+  store.consents['51911111111'] = { estado: 'otorgado', version: '2026-10' };
+  const g = gate({ text: ' /Reiniciar ' }, store, { TEST_NUMBERS: '51 911 111 111, +51 900 000 000' });
+  assert.strictEqual(g.action, 'reply');
+  assert.strictEqual(g.reply, 'Conversación reiniciada.');
+  assert.strictEqual(g.waMessage.text.body, 'Conversación reiniciada.');
+  assert.ok(!store.conversations[INPUT.from] && !store.consents[INPUT.from] && !store.citas[INPUT.from]);
+  assert.ok(store.consents['51911111111'], 'no toca a otros números');
+  // Después del reinicio, el consentimiento vuelve a pedirse.
+  assert.strictEqual(gate({ text: 'Quiero una cita' }, store).waMessage.type, 'interactive');
+});
+
+test('/reiniciar desde un número no permitido es un mensaje normal (va a la IA y no borra nada)', () => {
+  for (const env of [{ TEST_NUMBERS: '51911111111' }, {}]) {
+    const store = granted();
+    const g = gate({ text: '/reiniciar' }, store, env);
+    assert.strictEqual(g.action, 'llm');
+    assert.strictEqual(store.consents[INPUT.from].estado, 'otorgado');
+  }
+});
+
 // ---------- Extraer mensaje ----------
 
 test('Extraer mensaje: lee el id del botón de consentimiento', () => {

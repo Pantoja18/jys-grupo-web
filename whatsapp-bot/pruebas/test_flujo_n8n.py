@@ -120,6 +120,26 @@ class TestPuertaConsentimiento(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "Node.js no está instalado")
+class TestReiniciar(unittest.TestCase):
+    def store(self):
+        s = granted()
+        s["conversations"] = {FROM: {"updatedAt": 0, "messages": [{"role": "user", "content": "Hola"}]}}
+        return s
+
+    def test_numero_permitido(self):
+        out, store = gate("/reiniciar", self.store(), env={"TEST_NUMBERS": "51911111111,51900000000"})
+        self.assertEqual(out["reply"], "Conversación reiniciada.")
+        self.assertNotIn(FROM, store["consents"])
+        self.assertNotIn(FROM, store["conversations"])
+
+    def test_numero_no_permitido(self):
+        out, store = gate("/reiniciar", self.store(), env={"TEST_NUMBERS": "51911111111"})
+        self.assertEqual(out["action"], "llm")
+        self.assertEqual(store["consents"][FROM]["estado"], "otorgado")
+        self.assertIn(FROM, store["conversations"])
+
+
+@unittest.skipUnless(NODE, "Node.js no está instalado")
 class TestIndicadorEscribiendo(unittest.TestCase):
     def test_cuerpo_y_url_del_indicador(self):
         g, _ = gate("Hola", messageId="wamid.XYZ", phoneNumberId="200")

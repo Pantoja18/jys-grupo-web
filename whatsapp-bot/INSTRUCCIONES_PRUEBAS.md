@@ -47,6 +47,8 @@ En **Meta for Developers → su app → WhatsApp → Configuración → Webhook 
 
 Envíe un WhatsApp al número de prueba desde un número registrado como destinatario y revise el resultado en n8n → *Executions*.
 
+**Repetir una prueba desde cero:** ponga su número en `TEST_NUMBERS` del `.env` (con código de país, p. ej. `51XXXXXXXXX`; varios separados por comas), aplique con `docker compose up -d --force-recreate` y escriba `/reiniciar` por WhatsApp. Valeria responde *"Conversación reiniciada."* y olvida el historial y el consentimiento de ese número. Desde otros números, `/reiniciar` se trata como un mensaje normal.
+
 ## Comparar modelos de Ollama (Fase 0)
 
 La batería conversacional (`pruebas/evaluar_modelos.py`) envía a Ollama los mismos mensajes que n8n, con datos ficticios, y revisa automáticamente tuteo, asesoría legal, consentimiento antes de pedir datos y el bloque `<cita>`. No usa n8n, ngrok ni WhatsApp. Requiere Python 3.9 o superior (solo la biblioteca estándar).
