@@ -1,9 +1,9 @@
 {
-  "name": "JS CONSULTORES Y ABOGADOS - Valeria v2 (Fase 0, Ollama o Claude)",
+  "name": "JS CONSULTORES Y ABOGADOS - Valeria v3 (consentimiento y citas)",
   "nodes": [
     {
       "parameters": {
-        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → LLM (Ollama local o Claude, según `LLM_PROVIDER`) → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato, se extrae el texto, se arma el historial, se llama al LLM y se responde por WhatsApp.\n3. Si el modelo emite un bloque `<cita>`, se notifica al estudio.\n\nLas ejecuciones exitosas y manuales **no se guardan** (Ley 29733). Variables: ver `.env.example`.",
+        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → LLM (Ollama local o Claude, según `LLM_PROVIDER`) → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato y se extrae el texto.\n3. *Puerta de consentimiento* (sin IA, Ley 29733): si no hay consentimiento y se pide una cita o se dan datos, envía el mensaje fijo con botones **Acepto / No acepto** y registra la respuesta.\n4. El resto va al LLM con la línea `Consentimiento: ...`; un filtro de salida bloquea pedidos de datos sin consentimiento.\n5. Si el modelo emite un bloque `<cita>` y hay consentimiento, se notifica al estudio.\n\nLas ejecuciones exitosas y manuales **no se guardan** (Ley 29733). Variables: ver `.env.example`.",
         "height": 320,
         "width": 520
       },
@@ -117,7 +117,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extrae el mensaje entrante del payload de WhatsApp Cloud API.\n// Devuelve [] para eventos sin mensaje (p. ej. estados \"sent\"/\"delivered\"/\"read\").\nconst body = $input.first().json.body || {};\nconst value = body.entry?.[0]?.changes?.[0]?.value;\nconst msg = value?.messages?.[0];\nif (!msg) return [];\n\n// Deduplicación: Meta puede reenviar el mismo webhook.\nconst store = $getWorkflowStaticData('global');\nstore.processed = store.processed || [];\nif (store.processed.includes(msg.id)) return [];\nstore.processed.push(msg.id);\nstore.processed = store.processed.slice(-500);\n\nconst contactName = value.contacts?.[0]?.profile?.name || '';\nlet text = '';\nlet needsAI = true;\nlet directReply = '';\n\nswitch (msg.type) {\n  case 'text':\n    text = msg.text?.body || '';\n    break;\n  case 'interactive':\n    text = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';\n    break;\n  case 'button':\n    text = msg.button?.text || '';\n    break;\n  default:\n    // Audio, imagen, documento, ubicación, etc.: se avisa al modelo para que responda según el system prompt.\n    text = `[El usuario envió un mensaje de tipo \"${msg.type}\" que el asistente no puede leer.]`;\n}\n\nif (!text.trim()) {\n  needsAI = false;\n  directReply = 'Disculpe, no pude leer su mensaje. ¿Podría escribirnos su consulta en texto, por favor?';\n}\n\nreturn [{\n  json: {\n    from: msg.from,\n    messageId: msg.id,\n    contactName,\n    phoneNumberId: value.metadata?.phone_number_id,\n    text: text.slice(0, 4000),\n    needsAI,\n    directReply,\n  },\n}];\n"
+        "jsCode": "// Extrae el mensaje entrante del payload de WhatsApp Cloud API.\n// Devuelve [] para eventos sin mensaje (p. ej. estados \"sent\"/\"delivered\"/\"read\").\nconst body = $input.first().json.body || {};\nconst value = body.entry?.[0]?.changes?.[0]?.value;\nconst msg = value?.messages?.[0];\nif (!msg) return [];\n\n// Deduplicación: Meta puede reenviar el mismo webhook.\nconst store = $getWorkflowStaticData('global');\nstore.processed = store.processed || [];\nif (store.processed.includes(msg.id)) return [];\nstore.processed.push(msg.id);\nstore.processed = store.processed.slice(-500);\n\nconst contactName = value.contacts?.[0]?.profile?.name || '';\nlet text = '';\nlet buttonId = '';\nlet needsAI = true;\nlet directReply = '';\n\nswitch (msg.type) {\n  case 'text':\n    text = msg.text?.body || '';\n    break;\n  case 'interactive':\n    // Respuesta a botones (p. ej. el consentimiento: consent_si / consent_no) o a una lista.\n    buttonId = msg.interactive?.button_reply?.id || msg.interactive?.list_reply?.id || '';\n    text = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';\n    break;\n  case 'button':\n    buttonId = msg.button?.payload || '';\n    text = msg.button?.text || '';\n    break;\n  default:\n    // Audio, imagen, documento, ubicación, etc.: se avisa al modelo para que responda según el system prompt.\n    text = `[El usuario envió un mensaje de tipo \"${msg.type}\" que el asistente no puede leer.]`;\n}\n\nif (!text.trim()) {\n  needsAI = false;\n  directReply = 'Disculpe, no pude leer su mensaje. ¿Podría escribirnos su consulta en texto, por favor?';\n}\n\nreturn [{\n  json: {\n    from: msg.from,\n    messageId: msg.id,\n    contactName,\n    phoneNumberId: value.metadata?.phone_number_id,\n    text: text.slice(0, 4000),\n    buttonId,\n    needsAI,\n    directReply,\n  },\n}];\n"
       },
       "id": "9db3df16-cab7-4219-bb97-0ea9eb03145b",
       "name": "Extraer mensaje",
@@ -130,47 +130,14 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "477a6bb8-3172-46a2-bd2b-50d254dd3331",
-              "leftValue": "={{ $json.needsAI }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "2d01e8d8-6cb0-441f-8ddc-c8e506084058",
-      "name": "¿Requiere IA?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        440,
-        260
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Arma la solicitud al LLM (Ollama o Anthropic, según LLM_PROVIDER) con el historial de la conversación.\nconst fs = require('fs');\nconst input = $input.first().json;\n\nconst provider = ($env.LLM_PROVIDER || 'ollama').trim().toLowerCase();\nif (!['ollama', 'anthropic'].includes(provider)) {\n  throw new Error(`LLM_PROVIDER no válido: \"${provider}\". Use \"ollama\" o \"anthropic\".`);\n}\n\n// El system prompt (incluido su \"Recordatorio final\") vive solo en system_prompt.md.\nconst promptPath = $env.SYSTEM_PROMPT_PATH || '/data/system_prompt.md';\nlet systemPrompt;\ntry {\n  systemPrompt = fs.readFileSync(promptPath, 'utf8');\n} catch (e) {\n  throw new Error(`No se pudo leer el system prompt en ${promptPath}: ${e.message}`);\n}\n\n// Memoria simple en static data del workflow (solo persiste en ejecuciones de producción).\nconst store = $getWorkflowStaticData('global');\nstore.conversations = store.conversations || {};\nconst maxTurns = parseInt($env.CONVERSATION_MAX_MESSAGES || '20', 10);\nconst ttlMs = parseInt($env.CONVERSATION_TTL_HOURS || '24', 10) * 3600 * 1000;\n\nlet convo = store.conversations[input.from];\nif (!convo || Date.now() - convo.updatedAt > ttlMs) {\n  convo = { messages: [], updatedAt: Date.now() };\n}\n\nconst now = new Date().toLocaleString('es-PE', {\n  timeZone: $env.BUSINESS_TIMEZONE || 'America/Lima',\n  dateStyle: 'full',\n  timeStyle: 'short',\n});\nconst nameNote = input.contactName ? ` | Nombre de perfil en WhatsApp: ${input.contactName}` : '';\nconst currentTurn = `[Contexto del sistema: fecha y hora actual: ${now}${nameNote}]\\n\\n${input.text}`;\nconst messages = [...convo.messages, { role: 'user', content: currentTurn }];\n\nlet llmBody;\nif (provider === 'anthropic') {\n  llmBody = {\n    model: $env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',\n    max_tokens: parseInt($env.ANTHROPIC_MAX_TOKENS || '8000', 10),\n    thinking: { type: 'adaptive' },\n    output_config: { effort: $env.ANTHROPIC_EFFORT || 'low' },\n    // Si un clasificador de seguridad rechaza la solicitud, la API la reintenta en el modelo recomendado.\n    fallbacks: 'default',\n    system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],\n    messages,\n  };\n} else {\n  llmBody = {\n    model: $env.OLLAMA_MODEL || 'llama3:latest',\n    stream: false,\n    keep_alive: $env.OLLAMA_KEEP_ALIVE || '30m',\n    options: {\n      temperature: parseFloat($env.OLLAMA_TEMPERATURE || '0.3'),\n      num_ctx: parseInt($env.OLLAMA_NUM_CTX || '8192', 10),\n      num_predict: parseInt($env.OLLAMA_NUM_PREDICT || '512', 10),\n    },\n    messages: [{ role: 'system', content: systemPrompt }, ...messages],\n  };\n}\n\nreturn [{ json: { ...input, provider, llmBody, history: convo.messages, maxTurns } }];\n"
+        "jsCode": "// Arma la solicitud al LLM (Ollama o Anthropic, según LLM_PROVIDER) con el historial de la conversación.\nconst fs = require('fs');\n// Se lee la salida de la puerta de consentimiento (no $input): los nodos intermedios no deben alterar los datos.\nconst input = $('Puerta de consentimiento').first().json;\n\nconst provider = ($env.LLM_PROVIDER || 'ollama').trim().toLowerCase();\nif (!['ollama', 'anthropic'].includes(provider)) {\n  throw new Error(`LLM_PROVIDER no válido: \"${provider}\". Use \"ollama\" o \"anthropic\".`);\n}\n\n// El system prompt (incluido su \"Recordatorio final\") vive solo en system_prompt.md.\nconst promptPath = $env.SYSTEM_PROMPT_PATH || '/data/system_prompt.md';\nlet systemPrompt;\ntry {\n  systemPrompt = fs.readFileSync(promptPath, 'utf8');\n} catch (e) {\n  throw new Error(`No se pudo leer el system prompt en ${promptPath}: ${e.message}`);\n}\n// Estado del consentimiento, al final del recordatorio. Va después del texto fijo para no romper la\n// caché del prompt (Ollama reutiliza el prefijo idéntico; Claude cachea el primer bloque).\nconst consentLine = `Consentimiento: ${input.consentStatus || 'pendiente'}`;\n\n// Memoria simple en static data del workflow (solo persiste en ejecuciones de producción).\nconst store = $getWorkflowStaticData('global');\nstore.conversations = store.conversations || {};\nconst maxTurns = parseInt($env.CONVERSATION_MAX_MESSAGES || '20', 10);\nconst ttlMs = parseInt($env.CONVERSATION_TTL_HOURS || '24', 10) * 3600 * 1000;\n\nlet convo = store.conversations[input.from];\nif (!convo || Date.now() - convo.updatedAt > ttlMs) {\n  convo = { messages: [], updatedAt: Date.now() };\n}\n\nconst now = new Date().toLocaleString('es-PE', {\n  timeZone: $env.BUSINESS_TIMEZONE || 'America/Lima',\n  dateStyle: 'full',\n  timeStyle: 'short',\n});\nconst nameNote = input.contactName ? ` | Nombre de perfil en WhatsApp: ${input.contactName}` : '';\nconst currentTurn = `[Contexto del sistema: fecha y hora actual: ${now}${nameNote}]\\n\\n${input.text}`;\nconst messages = [...convo.messages, { role: 'user', content: currentTurn }];\n\nlet llmBody;\nif (provider === 'anthropic') {\n  llmBody = {\n    model: $env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',\n    max_tokens: parseInt($env.ANTHROPIC_MAX_TOKENS || '8000', 10),\n    thinking: { type: 'adaptive' },\n    output_config: { effort: $env.ANTHROPIC_EFFORT || 'low' },\n    // Si un clasificador de seguridad rechaza la solicitud, la API la reintenta en el modelo recomendado.\n    fallbacks: 'default',\n    system: [\n      { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },\n      { type: 'text', text: consentLine },\n    ],\n    messages,\n  };\n} else {\n  llmBody = {\n    model: $env.OLLAMA_MODEL || 'llama3:latest',\n    stream: false,\n    keep_alive: $env.OLLAMA_KEEP_ALIVE || '30m',\n    options: {\n      temperature: parseFloat($env.OLLAMA_TEMPERATURE || '0.3'),\n      num_ctx: parseInt($env.OLLAMA_NUM_CTX || '8192', 10),\n      num_predict: parseInt($env.OLLAMA_NUM_PREDICT || '512', 10),\n    },\n    messages: [{ role: 'system', content: `${systemPrompt.trimEnd()}\\n\\n${consentLine}\\n` }, ...messages],\n  };\n}\n\nreturn [{ json: { ...input, provider, llmBody, history: convo.messages, maxTurns } }];\n"
       },
       "id": "4d289edc-c53a-45ef-ae8e-ce986a414aaa",
       "name": "Preparar solicitud LLM",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
+        880,
         160
       ]
     },
@@ -199,7 +166,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
+        1320,
         280
       ],
       "retryOnFail": true,
@@ -210,28 +177,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Procesa la respuesta del LLM (Ollama o Anthropic), extrae el bloque <cita> y actualiza la memoria.\nconst res = $input.first().json;\nconst ctx = $('Preparar solicitud LLM').first().json;\n\nconst FALLBACK = 'Disculpe, en este momento no puedo procesar su mensaje. Un miembro de nuestro equipo le contactará en horario de atención. Gracias por escribir a JS CONSULTORES Y ABOGADOS.';\nconst REFUSAL = 'Disculpe, no puedo ayudarle con esa solicitud por este medio. Si lo desea, puedo coordinar una consulta con el equipo del estudio.';\n\nlet reply = '';\nlet ok = false;\n\nif (res.error) {\n  // LLM caído, modelo no descargado, clave inválida o tiempo de espera agotado.\n  reply = FALLBACK;\n} else if (ctx.provider === 'anthropic') {\n  if (res.stop_reason === 'refusal') {\n    reply = REFUSAL;\n  } else if (Array.isArray(res.content)) {\n    // Solo bloques de texto: la respuesta puede incluir bloques \"thinking\" que no se envían.\n    reply = res.content.filter(b => b.type === 'text').map(b => b.text).join('\\n');\n    ok = true;\n  }\n} else if (res.message && typeof res.message.content === 'string') {\n  reply = res.message.content;\n  ok = true;\n}\n\nreply = reply.replace(/<think>[\\s\\S]*?<\\/think>/g, '').trim(); // por si se usa un modelo con razonamiento visible\nif (!reply) { reply = FALLBACK; ok = false; }\n\n// Extraer la solicitud de cita, tolerando bloques de código alrededor. Si el modelo emitió varios\n// bloques se usa el último válido, y se retiran todos del mensaje visible.\nconst CITA_RE = /(```[a-z]*\\s*)?<cita>([\\s\\S]*?)<\\/cita>(\\s*```)?/gi;\nconst parseCita = (raw) => {\n  raw = raw.trim();\n  try { return JSON.parse(raw); } catch (e) {}\n  const obj = raw.match(/\\{[\\s\\S]*\\}/);\n  try { return obj ? JSON.parse(obj[0]) : { raw }; } catch (e) { return { raw }; }\n};\nlet appointment = null;\nfor (const m of reply.matchAll(CITA_RE)) {\n  const parsed = parseCita(m[2]);\n  if (!appointment || !parsed.raw || appointment.raw) appointment = parsed;\n}\nif (appointment) {\n  reply = reply.replace(CITA_RE, '').trim();\n}\n// Etiquetas <cita> sueltas o sin cerrar: no mostrarlas al usuario.\nreply = reply.replace(/<\\/?cita>[\\s\\S]*$/i, '').trim();\nif (!reply && appointment) {\n  reply = 'Gracias, he registrado su solicitud. Un miembro de nuestro equipo le confirmará la cita en horario de atención.';\n} else if (!reply) {\n  reply = FALLBACK;\n  ok = false;\n}\n\nif (reply.length > 4000) reply = reply.slice(0, 3990) + '…';\n\nif (ok) {\n  const store = $getWorkflowStaticData('global');\n  store.conversations = store.conversations || {};\n  const msgs = [\n    ...ctx.history,\n    { role: 'user', content: ctx.text },\n    { role: 'assistant', content: reply },\n  ];\n  let trimmed = msgs.slice(-ctx.maxTurns);\n  if (trimmed.length && trimmed[0].role !== 'user') trimmed = trimmed.slice(1);\n  store.conversations[ctx.from] = { messages: trimmed, updatedAt: Date.now() };\n}\n\nconst u = res.usage || {};\nreturn [{\n  json: {\n    from: ctx.from,\n    phoneNumberId: ctx.phoneNumberId,\n    reply,\n    appointment,\n    hasAppointment: !!appointment,\n    provider: ctx.provider,\n    usage: {\n      input_tokens: u.input_tokens ?? res.prompt_eval_count ?? null,\n      output_tokens: u.output_tokens ?? res.eval_count ?? null,\n      total_ms: res.total_duration ? Math.round(res.total_duration / 1e6) : null,\n    },\n  },\n}];\n"
+        "jsCode": "// Procesa la respuesta del LLM (Ollama o Anthropic), extrae el bloque <cita>, aplica el filtro de\n// consentimiento y actualiza la memoria.\nconst res = $input.first().json;\nconst ctx = $('Preparar solicitud LLM').first().json;\n\nconst FALLBACK = 'Disculpe, en este momento no puedo procesar su mensaje. Un miembro de nuestro equipo le contactará en horario de atención. Gracias por escribir a JS CONSULTORES Y ABOGADOS.';\nconst REFUSAL = 'Disculpe, no puedo ayudarle con esa solicitud por este medio. Si lo desea, puedo coordinar una consulta con el equipo del estudio.';\n\nlet reply = '';\nlet ok = false;\n\nif (res.error) {\n  // LLM caído, modelo no descargado, clave inválida o tiempo de espera agotado.\n  reply = FALLBACK;\n} else if (ctx.provider === 'anthropic') {\n  if (res.stop_reason === 'refusal') {\n    reply = REFUSAL;\n  } else if (Array.isArray(res.content)) {\n    // Solo bloques de texto: la respuesta puede incluir bloques \"thinking\" que no se envían.\n    reply = res.content.filter(b => b.type === 'text').map(b => b.text).join('\\n');\n    ok = true;\n  }\n} else if (res.message && typeof res.message.content === 'string') {\n  reply = res.message.content;\n  ok = true;\n}\n\nreply = reply.replace(/<think>[\\s\\S]*?<\\/think>/g, '').trim(); // por si se usa un modelo con razonamiento visible\nif (!reply) { reply = FALLBACK; ok = false; }\n\n// Extraer la solicitud de cita, tolerando bloques de código alrededor. Si el modelo emitió varios\n// bloques se usa el último válido, y se retiran todos del mensaje visible.\nconst CITA_RE = /(```[a-z]*\\s*)?<cita>([\\s\\S]*?)<\\/cita>(\\s*```)?/gi;\nconst parseCita = (raw) => {\n  raw = raw.trim();\n  try { return JSON.parse(raw); } catch (e) {}\n  const obj = raw.match(/\\{[\\s\\S]*\\}/);\n  try { return obj ? JSON.parse(obj[0]) : { raw }; } catch (e) { return { raw }; }\n};\nlet appointment = null;\nfor (const m of reply.matchAll(CITA_RE)) {\n  const parsed = parseCita(m[2]);\n  if (!appointment || !parsed.raw || appointment.raw) appointment = parsed;\n}\nif (appointment) {\n  reply = reply.replace(CITA_RE, '').trim();\n}\n// Etiquetas <cita> sueltas o sin cerrar: no mostrarlas al usuario.\nreply = reply.replace(/<\\/?cita>[\\s\\S]*$/i, '').trim();\nif (!reply && appointment) {\n  reply = 'Gracias, he registrado su solicitud. Un miembro de nuestro equipo le confirmará la cita en horario de atención.';\n} else if (!reply) {\n  reply = FALLBACK;\n  ok = false;\n}\n\nif (reply.length > 4000) reply = reply.slice(0, 3990) + '…';\n\nconst consented = ctx.consentStatus === 'otorgado';\nlet waMessage = { type: 'text', text: { preview_url: false, body: reply } };\n\n// Filtro de salida (Ley N.° 29733): sin consentimiento otorgado, si la IA pide nombre, correo, DNI,\n// teléfono o dirección, se reemplaza su respuesta por el mensaje de consentimiento con botones.\nconst DATA_WORD = /(nombre|apellido|correo|e-?mail|\\bdni\\b|documento de identidad|tel[eé]fono|celular|n[uú]mero de contacto|direcci[oó]n|domicilio)/i;\nconst REQUEST = /(ind[ií]queme|ind[ií]quenos|ind[ií]came|me (indica|brinda|proporciona|comparte|da|facilita|dice|deja|escribe|env[ií]a)|br[ií]ndeme|proporci[oó]neme|comp[aá]rtame|facil[ií]teme|d[eé]jeme|d[eé]jenos|env[ií]eme|escr[ií]bame|podr[ií]a (darme|indicarme|brindarme|compartir|proporcionar|dejarnos|enviarme|facilitarme)|necesit(o|amos|aremos)|requerimos|cu[aá]l es su|a nombre de qui[eé]n|puede dejar)/i;\nconst asksPersonalData = (text) => text.split(/(?<=[.?!\\n])\\s+/).some((s) =>\n  DATA_WORD.test(s) && (REQUEST.test(s) || (/\\bsus?\\b/i.test(s) && s.includes('?'))));\nlet blockedByConsent = false;\nif (ok && !consented && asksPersonalData(reply)) {\n  blockedByConsent = true;\n  reply = ctx.consentText;\n  waMessage = ctx.consentPrompt;\n  const store = $getWorkflowStaticData('global');\n  store.consents = store.consents || {};\n  store.consents[ctx.from] = { ...(store.consents[ctx.from] || { estado: 'pendiente' }), prompted: true };\n}\n\nif (ok) {\n  const store = $getWorkflowStaticData('global');\n  store.conversations = store.conversations || {};\n  const msgs = [\n    ...ctx.history,\n    { role: 'user', content: ctx.text },\n    { role: 'assistant', content: reply },\n  ];\n  let trimmed = msgs.slice(-ctx.maxTurns);\n  if (trimmed.length && trimmed[0].role !== 'user') trimmed = trimmed.slice(1);\n  store.conversations[ctx.from] = { messages: trimmed, updatedAt: Date.now() };\n}\n\n// Sin consentimiento otorgado no se registra ni se notifica ninguna cita.\nconst validAppointment = !!appointment && !appointment.raw && consented;\n\nconst u = res.usage || {};\nreturn [{\n  json: {\n    from: ctx.from,\n    phoneNumberId: ctx.phoneNumberId,\n    reply,\n    waMessage,\n    blockedByConsent,\n    consentStatus: ctx.consentStatus,\n    policyVersion: ctx.policyVersion,\n    appointment: consented ? appointment : null,\n    hasAppointment: validAppointment,\n    provider: ctx.provider,\n    usage: {\n      input_tokens: u.input_tokens ?? res.prompt_eval_count ?? null,\n      output_tokens: u.output_tokens ?? res.eval_count ?? null,\n      total_ms: res.total_duration ? Math.round(res.total_duration / 1e6) : null,\n    },\n  },\n}];\n"
       },
       "id": "a5915d08-293d-463e-82c0-c008a8330ed3",
       "name": "Procesar respuesta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1320,
+        1540,
         160
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const input = $input.first().json;\nreturn [{ json: { from: input.from, phoneNumberId: input.phoneNumberId, reply: input.directReply, appointment: null, hasAppointment: false } }];\n"
-      },
-      "id": "7983cfcf-24d2-4fdf-92a2-3ea5cbdffaf5",
-      "name": "Respuesta directa",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        660,
-        380
       ]
     },
     {
@@ -253,7 +207,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.from, type: 'text', text: { preview_url: false, body: $json.reply } }) }}",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.from, ...$json.waMessage }) }}",
         "options": {}
       },
       "id": "b6004696-6e58-42d3-a429-49d5cbc4edcb",
@@ -261,8 +215,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1320,
-        260
+        1760,
+        360
       ],
       "retryOnFail": true,
       "maxTries": 3,
@@ -297,7 +251,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1320,
+        1760,
         60
       ]
     },
@@ -315,7 +269,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1540,
+        1980,
         40
       ],
       "onError": "continueRegularOutput",
@@ -349,7 +303,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        880,
+        1100,
         160
       ],
       "notes": "LLM_PROVIDER=anthropic → Claude; cualquier otro valor válido (ollama) → Ollama."
@@ -391,7 +345,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
+        1320,
         40
       ],
       "retryOnFail": true,
@@ -399,6 +353,51 @@
       "waitBetweenTries": 2000,
       "onError": "continueRegularOutput",
       "notes": "Solo se usa con LLM_PROVIDER=anthropic. Requiere ANTHROPIC_API_KEY."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Puerta de consentimiento (Ley N.° 29733), determinista: decide SIN la IA cuándo pedir, registrar o\n// respetar el consentimiento. Devuelve action \"llm\" (sigue a la IA) o \"reply\" (mensaje fijo en waMessage).\nconst input = $input.first().json;\nconst from = input.from;\nconst store = $getWorkflowStaticData('global');\nstore.conversations = store.conversations || {};\nstore.consents = store.consents || {};\nconst policyVersion = ($env.POLICY_VERSION || '').trim() || 'sin-version';\nconst maxTurns = parseInt($env.CONVERSATION_MAX_MESSAGES || '20', 10);\nconst ttlMs = parseInt($env.CONVERSATION_TTL_HOURS || '24', 10) * 3600 * 1000;\n\n// Texto fijo de crm/ARQUITECTURA.md §6 (igual al de system_prompt.md).\nconst CONSENT_TEXT = 'Para gestionar su cita necesitamos usar algunos datos personales (nombre, horario preferido y, opcionalmente, su correo), conforme a la Ley N.° 29733. Puede revisar nuestra política en construccionesyedificacionesjys.com/terminos.html#privacidad. ¿Nos autoriza?';\nconst ACCEPTED = 'Gracias, hemos registrado su autorización. ¿Me indica su nombre completo, por favor?';\nconst REJECTED = 'Entendido, no usaremos sus datos personales; puedo darle información general o puede comunicarse directamente al WhatsApp 956 771 681, al teléfono 993 793 224 o al correo Ejuridicojys@gmail.com. Si cambia de opinión, escriba *Acepto*.';\n\nconst textMessage = (body) => ({ type: 'text', text: { preview_url: false, body } });\nconst consentPrompt = {\n  type: 'interactive',\n  interactive: {\n    type: 'button',\n    body: { text: CONSENT_TEXT },\n    action: { buttons: [\n      { type: 'reply', reply: { id: 'consent_si', title: 'Acepto' } },\n      { type: 'reply', reply: { id: 'consent_no', title: 'No acepto' } },\n    ] },\n  },\n};\n\n// Estado vigente: un \"otorgado\" de una versión anterior de la política vuelve a \"pendiente\".\nconst consentOf = () => {\n  const c = store.consents[from];\n  if (!c) return { estado: 'pendiente' };\n  if (c.estado === 'otorgado' && c.version !== policyVersion) return { ...c, estado: 'pendiente' };\n  return c;\n};\n\n// Guarda el intercambio en el historial, para que la IA conozca el contexto en el siguiente turno.\nconst remember = (userText, assistantText) => {\n  let convo = store.conversations[from];\n  if (!convo || Date.now() - convo.updatedAt > ttlMs) convo = { messages: [] };\n  let msgs = [...convo.messages, { role: 'user', content: userText }, { role: 'assistant', content: assistantText }].slice(-maxTurns);\n  if (msgs.length && msgs[0].role !== 'user') msgs = msgs.slice(1);\n  store.conversations[from] = { messages: msgs, updatedAt: Date.now() };\n};\n\nconst out = (extra) => [{ json: {\n  from,\n  messageId: input.messageId,\n  contactName: input.contactName,\n  phoneNumberId: input.phoneNumberId,\n  text: input.text,\n  consentStatus: consentOf().estado,\n  policyVersion,\n  consentText: CONSENT_TEXT,\n  consentPrompt,\n  ...extra,\n} }];\nconst reply = (waMessage, visible) => out({ action: 'reply', waMessage, reply: visible });\n\nif (!input.needsAI) return reply(textMessage(input.directReply), input.directReply);\n\nconst norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')\n  .replace(/[^a-z0-9@ ]+/g, ' ').replace(/\\s+/g, ' ').trim();\nconst t = norm(input.text);\nconst current = consentOf();\n\n// 1) Respuesta al consentimiento: botones o, si se escribe, solo frases inequívocas.\nconst YES = ['acepto', 'si acepto', 'si, acepto', 'lo acepto', 'si lo acepto', 'autorizo', 'si autorizo', 'acepto gracias'];\nconst NO = ['no acepto', 'no lo acepto', 'no autorizo', 'no lo autorizo', 'no acepto gracias'];\nlet decision = null;\nif (input.buttonId === 'consent_si') decision = 'otorgado';\nelse if (input.buttonId === 'consent_no') decision = 'rechazado';\nelse if (YES.includes(t)) decision = 'otorgado';\nelse if (NO.includes(t)) decision = 'rechazado';\nelse if (current.prompted && ['si', 'ok', 'de acuerdo', 'claro', 'si claro', 'si por favor'].includes(t)) decision = 'otorgado';\nelse if (current.prompted && t === 'no') decision = 'rechazado';\n\n// Un \"acepto\" escrito cuando ya está otorgado (y no se acaba de preguntar) se deja a la IA.\nif (decision && !(decision === current.estado && !input.buttonId && !current.prompted)) {\n  store.consents[from] = {\n    estado: decision,\n    fecha: new Date().toISOString(),\n    version: policyVersion,\n    canal: input.buttonId ? 'whatsapp_botones' : 'whatsapp_texto',\n    prompted: false,\n  };\n  const msg = decision === 'otorgado' ? ACCEPTED : REJECTED;\n  remember(input.text, msg);\n  return reply(textMessage(msg), msg);\n}\n\n// 2) Sin consentimiento otorgado: si hay intención de cita o de dar datos, se pide el consentimiento\n//    con botones y NO se llama a la IA.\nconst INTENT = /\\b(citas?|agendar|agendo|agenda|agendame|programar|reservar|consultas?|reunion|reunirme|reunirnos|abogad[oa]s?|doctora|asesor|asesoria|hablar con|comunicarme con|contactar|contactenme|llamenme|me llamo|mi nombre|mi correo|mi dni|mi telefono|mi celular|mi numero|mi direccion|separar|visita|visitar)\\b/;\nconst EMAIL = /[^\\s@]+@[^\\s@]+\\.[a-z]{2,}/i;\nconst LONG_NUMBER = /(\\d[\\s.-]?){8,}/; // DNI o teléfono\nconst hasData = EMAIL.test(input.text) || LONG_NUMBER.test(input.text) || /\\b(me llamo|mi nombre es)\\b/.test(t);\nif (current.estado !== 'otorgado' && (INTENT.test(t) || hasData)) {\n  store.consents[from] = { ...(store.consents[from] || { estado: 'pendiente' }), prompted: true };\n  // Minimización: si el mensaje ya traía datos personales, no se guardan antes del consentimiento.\n  remember(hasData ? '[Mensaje con datos personales omitido hasta obtener el consentimiento]' : input.text, CONSENT_TEXT);\n  return reply(consentPrompt, CONSENT_TEXT);\n}\n\n// 3) Todo lo demás va a la IA, que recibe el estado del consentimiento.\nreturn out({ action: 'llm' });\n"
+      },
+      "name": "Puerta de consentimiento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        260
+      ],
+      "id": "b5c7c1a3-9bc4-4aaf-9a7c-1af86cdf7c77"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "bf8b781b-347a-4e31-b822-81e12c068b7b",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "llm",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "¿Llamar a la IA?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        260
+      ],
+      "id": "7dff2359-92db-499e-b322-f00fe5582d1b"
     }
   ],
   "connections": {
@@ -446,25 +445,7 @@
       "main": [
         [
           {
-            "node": "¿Requiere IA?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Requiere IA?": {
-      "main": [
-        [
-          {
-            "node": "Preparar solicitud LLM",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respuesta directa",
+            "node": "Puerta de consentimiento",
             "type": "main",
             "index": 0
           }
@@ -481,17 +462,6 @@
           },
           {
             "node": "¿Solicitud de cita?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Respuesta directa": {
-      "main": [
-        [
-          {
-            "node": "Enviar respuesta WhatsApp",
             "type": "main",
             "index": 0
           }
@@ -555,6 +525,35 @@
         [
           {
             "node": "Procesar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Puerta de consentimiento": {
+      "main": [
+        [
+          {
+            "node": "¿Llamar a la IA?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Llamar a la IA?": {
+      "main": [
+        [
+          {
+            "node": "Preparar solicitud LLM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar respuesta WhatsApp",
             "type": "main",
             "index": 0
           }

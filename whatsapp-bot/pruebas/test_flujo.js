@@ -8,38 +8,26 @@
 
 'use strict';
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
+const { wf, nodes, runCode } = require('./nodos_n8n');
 
-const ROOT = path.join(__dirname, '..');
-const wf = JSON.parse(fs.readFileSync(path.join(ROOT, 'n8n_workflow_template.json'), 'utf8'));
-const nodes = Object.fromEntries(wf.nodes.map((n) => [n.name, n]));
-const PROMPT_PATH = path.join(ROOT, 'system_prompt.md');
+const INPUT = { from: '51900000000', messageId: 'wamid.T1', contactName: 'Prueba', phoneNumberId: '100', text: 'Hola', buttonId: '', needsAI: true, directReply: '' };
+const POLICY = { POLICY_VERSION: '2026-10' };
 
-// Ejecuta el código de un nodo Code como lo haría n8n (modo "una vez para todos los ítems").
-function runCode(nodeName, { input, env = {}, store = {}, refs = {} }) {
-  const code = nodes[nodeName].parameters.jsCode;
-  const fn = new Function('$input', '$', '$env', '$getWorkflowStaticData', 'require', code);
-  return fn(
-    { first: () => ({ json: input }) },
-    (name) => {
-      assert.ok(name in refs, `el nodo hace referencia a "${name}", que la prueba no simuló`);
-      return { first: () => ({ json: refs[name] }) };
-    },
-    { SYSTEM_PROMPT_PATH: PROMPT_PATH, ...env },
-    () => store,
-    require,
-  );
+// Puerta de consentimiento → (si va a la IA) Preparar solicitud LLM.
+function gate(input = {}, store = {}, env = {}) {
+  return runCode('Puerta de consentimiento', { input: { ...INPUT, ...input }, env: { ...POLICY, ...env }, store })[0].json;
 }
 
-const INPUT = { from: '51900000000', messageId: 'wamid.T1', contactName: 'Prueba', phoneNumberId: '100', text: 'Hola', needsAI: true, directReply: '' };
-
-function prepare(env = {}, store = {}) {
-  return runCode('Preparar solicitud LLM', { input: INPUT, env, store })[0].json;
+function prepare(env = {}, store = {}, input = {}) {
+  const g = gate(input, store, env);
+  assert.strictEqual(g.action, 'llm', `la puerta no envió el mensaje a la IA: ${g.reply}`);
+  return runCode('Preparar solicitud LLM', { input: { success: true }, env: { ...POLICY, ...env }, store, refs: { 'Puerta de consentimiento': g } })[0].json;
 }
 
-function parse(response, provider = 'ollama', store = {}) {
-  const ctx = prepare({ LLM_PROVIDER: provider }, store);
+const granted = () => ({ consents: { [INPUT.from]: { estado: 'otorgado', fecha: '2026-10-24T12:00:00.000Z', version: '2026-10', canal: 'whatsapp_botones' } } });
+
+function parse(response, provider = 'ollama', store = granted(), input = {}) {
+  const ctx = prepare({ LLM_PROVIDER: provider }, store, input);
   return { out: runCode('Procesar respuesta', { input: response, store, refs: { 'Preparar solicitud LLM': ctx } })[0].json, store };
 }
 
@@ -195,7 +183,157 @@ test('respuesta vacía de Ollama: mensaje de cortesía', () => {
   assert.ok(out.reply.startsWith('Disculpe, en este momento no puedo'));
 });
 
-// ---------- Extraer mensaje (sin cambios en la Fase 0) ----------
+// ---------- Puerta de consentimiento (Ley N.° 29733) ----------
+
+const CONSENT_TEXT = 'Para gestionar su cita necesitamos usar algunos datos personales (nombre, horario preferido y, opcionalmente, su correo), conforme a la Ley N.° 29733. Puede revisar nuestra política en construccionesyedificacionesjys.com/terminos.html#privacidad. ¿Nos autoriza?';
+
+test('la puerta va antes de la IA y las respuestas fijas no pasan por el LLM', () => {
+  assert.strictEqual(wf.connections['Extraer mensaje'].main[0][0].node, 'Puerta de consentimiento');
+  assert.strictEqual(wf.connections['Puerta de consentimiento'].main[0][0].node, '¿Llamar a la IA?');
+  const cond = nodes['¿Llamar a la IA?'].parameters.conditions.conditions[0];
+  assert.strictEqual(cond.leftValue, '={{ $json.action }}');
+  assert.strictEqual(cond.rightValue, 'llm');
+  const outs = wf.connections['¿Llamar a la IA?'].main;
+  assert.strictEqual(outs[1][0].node, 'Enviar respuesta WhatsApp');
+  assert.ok(nodes['Enviar respuesta WhatsApp'].parameters.jsonBody.includes('...$json.waMessage'));
+});
+
+test('el texto fijo de consentimiento es igual en la puerta y en system_prompt.md', () => {
+  const prompt = require('fs').readFileSync(require('./nodos_n8n').PROMPT_PATH, 'utf8');
+  assert.ok(prompt.includes(CONSENT_TEXT));
+  assert.strictEqual(gate({ text: 'Quiero una cita' }).consentText, CONSENT_TEXT);
+});
+
+test('sin consentimiento, pedir una cita no llama a la IA: envía los botones Acepto / No acepto', () => {
+  for (const text of ['Quiero agendar una cita', 'Necesito hablar con un abogado', 'quiero hablar con una persona', 'Me llamo Ana Torres', 'mi correo es ana@example.com', 'Mi DNI es 12345678']) {
+    const store = {};
+    const g = gate({ text }, store);
+    assert.strictEqual(g.action, 'reply', text);
+    assert.strictEqual(g.waMessage.type, 'interactive');
+    assert.strictEqual(g.waMessage.interactive.body.text, CONSENT_TEXT);
+    assert.deepStrictEqual(g.waMessage.interactive.action.buttons.map((b) => [b.reply.id, b.reply.title]), [['consent_si', 'Acepto'], ['consent_no', 'No acepto']]);
+    assert.strictEqual(store.consents[INPUT.from].prompted, true);
+  }
+});
+
+test('los datos personales enviados antes del consentimiento no se guardan en el historial', () => {
+  const store = {};
+  gate({ text: 'Soy Ana, mi correo es ana@example.com y quiero una cita' }, store);
+  const saved = JSON.stringify(store.conversations);
+  assert.ok(!saved.includes('ana@example.com'), saved);
+});
+
+test('un saludo o una pregunta general sin intención de cita sí va a la IA', () => {
+  for (const text of ['Hola', '¿Dónde queda su oficina?', '¿Qué servicios ofrecen?']) assert.strictEqual(gate({ text }).action, 'llm', text);
+});
+
+test('botón "Acepto": registra otorgado con fecha y versión, y responde sin la IA', () => {
+  const store = {};
+  gate({ text: 'Quiero una cita' }, store);
+  const g = gate({ text: 'Acepto', buttonId: 'consent_si', messageId: 'wamid.T2' }, store);
+  assert.strictEqual(g.action, 'reply');
+  assert.ok(g.reply.startsWith('Gracias, hemos registrado su autorización'));
+  const c = store.consents[INPUT.from];
+  assert.strictEqual(c.estado, 'otorgado');
+  assert.strictEqual(c.version, '2026-10');
+  assert.strictEqual(c.canal, 'whatsapp_botones');
+  assert.ok(!Number.isNaN(Date.parse(c.fecha)));
+  // Con consentimiento, la siguiente petición de cita ya va a la IA.
+  assert.strictEqual(gate({ text: 'Quiero una cita el martes' }, store).action, 'llm');
+  assert.strictEqual(gate({ text: 'Quiero una cita el martes' }, store).consentStatus, 'otorgado');
+});
+
+test('consentimiento por texto: "acepto", "Sí, acepto" y "sí" justo después de preguntar', () => {
+  for (const text of ['acepto', 'Sí, acepto.', 'ACEPTO']) {
+    const store = {};
+    assert.strictEqual(gate({ text }, store).action, 'reply', text);
+    assert.strictEqual(store.consents[INPUT.from].estado, 'otorgado', text);
+    assert.strictEqual(store.consents[INPUT.from].canal, 'whatsapp_texto');
+  }
+  const store = {};
+  gate({ text: 'Quiero una cita' }, store);
+  gate({ text: 'sí' }, store);
+  assert.strictEqual(store.consents[INPUT.from].estado, 'otorgado');
+  // Un "sí" suelto sin pregunta previa no cuenta como consentimiento.
+  const other = {};
+  assert.strictEqual(gate({ text: 'sí' }, other).action, 'llm');
+  assert.ok(!other.consents[INPUT.from]);
+});
+
+test('rechazo ("No acepto"): registra rechazado, no pide datos y da los canales directos', () => {
+  for (const [text, buttonId] of [['No acepto', 'consent_no'], ['no acepto', '']]) {
+    const store = {};
+    gate({ text: 'Quiero una cita' }, store);
+    const g = gate({ text, buttonId }, store);
+    assert.strictEqual(store.consents[INPUT.from].estado, 'rechazado');
+    assert.ok(g.reply.includes('no usaremos sus datos personales'));
+    assert.ok(g.reply.includes('956 771 681') && g.reply.includes('993 793 224'));
+    assert.ok(!/nombre|indíqueme/i.test(g.reply), g.reply);
+    // Las preguntas generales siguen yendo a la IA, que recibe "Consentimiento: rechazado".
+    const ctx = prepare({}, store, { text: '¿Qué servicios tienen?' });
+    assert.ok(ctx.llmBody.messages[0].content.trimEnd().endsWith('Consentimiento: rechazado'));
+  }
+});
+
+test('un consentimiento de una versión anterior de la política se vuelve a pedir', () => {
+  const store = granted();
+  assert.strictEqual(gate({ text: 'Quiero una cita' }, store, { POLICY_VERSION: '2027-01' }).action, 'reply');
+});
+
+test('la IA recibe "Consentimiento: ..." al final del recordatorio (Ollama y Claude)', () => {
+  const o = prepare({}, granted()).llmBody.messages[0].content;
+  assert.ok(o.includes('## Recordatorio final'));
+  assert.ok(o.trimEnd().endsWith('Consentimiento: otorgado'));
+  assert.ok(prepare({}, {}).llmBody.messages[0].content.trimEnd().endsWith('Consentimiento: pendiente'));
+  const a = prepare({ LLM_PROVIDER: 'anthropic' }, {}).llmBody.system;
+  assert.strictEqual(a.length, 2);
+  assert.ok(a[0].cache_control && !a[1].cache_control);
+  assert.strictEqual(a[1].text, 'Consentimiento: pendiente');
+});
+
+test('filtro de salida: sin consentimiento, si la IA pide datos se envían los botones', () => {
+  for (const content of ['Con gusto. ¿Me indica su nombre completo, por favor?', 'Indíqueme su correo y su DNI.', '¿Cuál es su número de teléfono?', 'Por favor, bríndeme su dirección.']) {
+    const store = {};
+    const { out } = parse({ message: { content } }, 'ollama', store);
+    assert.strictEqual(out.blockedByConsent, true, content);
+    assert.strictEqual(out.waMessage.type, 'interactive');
+    assert.strictEqual(out.reply, CONSENT_TEXT);
+    assert.strictEqual(store.consents[INPUT.from].prompted, true);
+    assert.strictEqual(store.conversations[INPUT.from].messages.at(-1).content, CONSENT_TEXT);
+  }
+});
+
+test('filtro de salida: no bloquea respuestas normales ni con consentimiento otorgado', () => {
+  for (const content of ['Puede comunicarse al teléfono 993 793 224 o al correo Ejuridicojys@gmail.com.', 'Atendemos de lunes a viernes. ¿En qué puedo ayudarle?']) {
+    const { out } = parse({ message: { content } }, 'ollama', {});
+    assert.strictEqual(out.blockedByConsent, false, content);
+    assert.strictEqual(out.waMessage.type, 'text');
+  }
+  const { out } = parse({ message: { content: '¿Me indica su nombre completo, por favor?' } });
+  assert.strictEqual(out.blockedByConsent, false);
+});
+
+test('sin consentimiento, un bloque <cita> no se registra ni se notifica', () => {
+  const { out } = parse({ message: { content: `Gracias.\n<cita>${CITA}</cita>` } }, 'ollama', {});
+  assert.strictEqual(out.hasAppointment, false);
+  assert.strictEqual(out.appointment, null);
+  assert.strictEqual(out.reply, 'Gracias.');
+});
+
+test('mensaje sin texto: respuesta directa sin la IA', () => {
+  const g = gate({ text: '', needsAI: false, directReply: 'Disculpe, no pude leer su mensaje.' });
+  assert.strictEqual(g.action, 'reply');
+  assert.strictEqual(g.waMessage.text.body, 'Disculpe, no pude leer su mensaje.');
+});
+
+// ---------- Extraer mensaje ----------
+
+test('Extraer mensaje: lee el id del botón de consentimiento', () => {
+  const body = { entry: [{ changes: [{ value: { metadata: { phone_number_id: '100' }, messages: [{ id: 'wamid.B', from: '519', type: 'interactive', interactive: { type: 'button_reply', button_reply: { id: 'consent_si', title: 'Acepto' } } }] } }] }] };
+  const out = runCode('Extraer mensaje', { input: { body }, store: {} })[0].json;
+  assert.strictEqual(out.buttonId, 'consent_si');
+  assert.strictEqual(out.text, 'Acepto');
+});
 
 test('Extraer mensaje: ignora duplicados por message.id', () => {
   const store = {};

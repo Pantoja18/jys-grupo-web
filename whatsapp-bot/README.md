@@ -29,6 +29,8 @@ El proveedor se elige con **`LLM_PROVIDER`** en el `.env`; el nodo **¿Usar Clau
 - **`ollama`** (por defecto): modelo local (`OLLAMA_MODEL`), sin enviar conversaciones a servicios externos. n8n llama a `POST {OLLAMA_URL}/api/chat` con `stream: false`, el system prompt como primer mensaje `system`, `num_ctx: 8192` (el system prompt ocupa ~4.400 tokens; no lo baje), `temperature: 0.3` y `keep_alive: 30m`.
 - **`anthropic`**: Claude por `POST https://api.anthropic.com/v1/messages` con `ANTHROPIC_API_KEY`, modelo `claude-sonnet-5-5`, `thinking: {type: "adaptive"}`, `output_config.effort` (`ANTHROPIC_EFFORT`, por defecto `low`), `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`) y el system prompt con caché. Envía a WhatsApp solo los bloques de texto y responde con cortesía si la API rechaza la solicitud (`stop_reason: "refusal"`).
 
+**Consentimiento:** ya no depende del modelo. La *Puerta de consentimiento* de n8n pide la autorización con botones y la registra sin pasar por la IA, y un filtro de salida bloquea cualquier pedido de datos sin consentimiento (ver *Flujo del workflow*).
+
 **Elegir el modelo local:** los modelos pequeños cumplen las reglas largas con menos fiabilidad (en las pruebas del 17/10/2026, `llama3` tuteó, pidió datos sin consentimiento y no emitió `<cita>`). Compare candidatos con la batería automática antes de cambiar `OLLAMA_MODEL` (ver `INSTRUCCIONES_PRUEBAS.md` → *Comparar modelos*). Las reglas críticas se refuerzan en `system_prompt.md` (sección *Trato de "Usted"* con ejemplos, mensaje fijo de consentimiento, ejemplo literal del bloque `<cita>` y *Recordatorio final*), pero la garantía real del consentimiento y del registro de citas llegará en la Fase 3 (`crm/ARQUITECTURA.md`), con código determinista en n8n.
 
 ## Flujo del workflow (`n8n_workflow_template.json`)
@@ -39,11 +41,16 @@ El proveedor se elige con **`LLM_PROVIDER`** en el `.env`; el nodo **¿Usar Clau
 
 **Mensajes (POST `/webhook/whatsapp`)**
 1. **Webhook**: responde `200` de inmediato (Meta reintenta si tarda).
-2. **Extraer mensaje**: ignora eventos de estado (`sent`, `delivered`, `read`), descarta duplicados por `message.id` y normaliza texto, botones y listas. Audios, imágenes y documentos se pasan como aviso para que el asistente pida la consulta por texto.
-3. **Preparar solicitud LLM**: lee `system_prompt.md`, recupera el historial del número (máx. `CONVERSATION_MAX_MESSAGES`, se reinicia tras `CONVERSATION_TTL_HOURS`) y arma el cuerpo de la petición.
-4. **¿Usar Claude?** → **Claude (Messages API)** si `LLM_PROVIDER=anthropic` (tiempo de espera 2 min, 3 intentos), o **Ollama (chat local)** en otro caso (`POST {OLLAMA_URL}/api/chat`, 5 min, 2 intentos).
-5. **Procesar respuesta**: si el LLM falla o rechaza la solicitud responde con un mensaje de cortesía, retira todos los bloques `<cita>{…}</cita>` (usa el último válido) y las etiquetas sueltas, recorta a los límites de WhatsApp y guarda el turno en memoria.
-6. **Enviar respuesta WhatsApp** y, si hubo bloque `<cita>`, **Notificar al estudio** con el JSON de la solicitud.
+2. **Extraer mensaje**: ignora eventos de estado (`sent`, `delivered`, `read`), descarta duplicados por `message.id` y normaliza texto, botones (incluido su `id`) y listas. Audios, imágenes y documentos se pasan como aviso para que el asistente pida la consulta por texto.
+3. **Puerta de consentimiento** (código determinista, sin IA; Ley N.° 29733): guarda por número el estado `pendiente` / `otorgado` / `rechazado`, con fecha, canal y `POLICY_VERSION`.
+   - Si no hay consentimiento otorgado y el mensaje muestra intención de cita o trae datos (cita, agendar, consulta, reunión, abogado, hablar con una persona, "me llamo…", un correo, un DNI o teléfono), **no llama al LLM**: envía el mensaje fijo de consentimiento como mensaje interactivo con los botones **Acepto** (`consent_si`) y **No acepto** (`consent_no`). Los datos que la persona haya escrito en ese mensaje no se guardan en el historial.
+   - Procesa los botones y las frases "acepto" / "no acepto" (y "sí" / "no" justo después de la pregunta) sin la IA y responde con un mensaje fijo. Si rechaza, no se piden datos y se dan los canales directos del estudio.
+   - Un consentimiento otorgado con otra `POLICY_VERSION` se vuelve a pedir.
+   - **¿Llamar a la IA?**: los mensajes fijos van directo a **Enviar respuesta WhatsApp**.
+4. **Preparar solicitud LLM**: lee `system_prompt.md`, le agrega al final la línea `Consentimiento: otorgado|pendiente|rechazado`, recupera el historial del número (máx. `CONVERSATION_MAX_MESSAGES`, se reinicia tras `CONVERSATION_TTL_HOURS`) y arma el cuerpo de la petición.
+5. **¿Usar Claude?** → **Claude (Messages API)** si `LLM_PROVIDER=anthropic` (tiempo de espera 2 min, 3 intentos), o **Ollama (chat local)** en otro caso (`POST {OLLAMA_URL}/api/chat`, 5 min, 2 intentos).
+6. **Procesar respuesta**: si el LLM falla o rechaza la solicitud responde con un mensaje de cortesía, retira todos los bloques `<cita>{…}</cita>` (usa el último válido) y las etiquetas sueltas, recorta a los límites de WhatsApp y guarda el turno en memoria. **Filtro de salida:** si no hay consentimiento otorgado y la respuesta pide nombre, correo, DNI, teléfono o dirección, se reemplaza por el mensaje de consentimiento con botones. Sin consentimiento, ningún bloque `<cita>` se registra.
+7. **Enviar respuesta WhatsApp** (texto o mensaje interactivo, según `waMessage`) y, si hubo bloque `<cita>` con consentimiento, **Notificar al estudio** con el JSON de la solicitud.
 
 ### Flujo conversacional (definido en `system_prompt.md`)
 
@@ -64,6 +71,8 @@ Saludo → filtrado del caso (área, resumen, urgencia, persona natural/empresa)
 ├── pruebas/
 │   ├── evaluar_modelos.py       # Batería conversacional contra Ollama (comparar modelos)
 │   ├── test_evaluar_modelos.py  # Pruebas del evaluador y del system prompt
+│   ├── test_flujo_n8n.py        # Pruebas de los nodos del flujo desde unittest (usa Node)
+│   ├── nodos_n8n.js             # Ejecuta los nodos Code del flujo fuera de n8n (lo usan las pruebas)
 │   └── test_flujo.js            # Pruebas de los nodos Code del flujo (sin n8n)
 ├── .env.example                 # Variables de entorno
 └── .gitignore
