@@ -1,5 +1,9 @@
-# JS CONSULTORES Y ABOGADOS – n8n local para pruebas del asistente de WhatsApp
-# Uso: docker compose up -d   →   http://localhost:5678
+# JS CONSULTORES Y ABOGADOS – n8n (Valeria) + CRM (PostgreSQL y crm-api) para la PC del estudio.
+# Uso (desde whatsapp-bot/):  docker compose up -d --build
+#   n8n:     http://localhost:5678
+#   CRM API: http://127.0.0.1:8000/health   (solo este equipo)
+#   PostgreSQL: SIN puerto publicado; solo lo alcanzan crm-api y crm-tools por la red interna "jys".
+# Herramientas del CRM (migraciones, scripts, pruebas):  docker compose run --rm crm-tools <comando>
 
 services:
   n8n:
@@ -34,7 +38,94 @@ services:
       - ./n8n_workflow_template.json:/data/n8n_workflow_template.json:ro
       # Carpeta local (excluida de git) donde n8n escribe datos/citas.jsonl.enc. Léala con herramientas/ver_citas.py.
       - ./datos:/data/datos
+    # "default" conserva la salida a internet/Meta/Ollama como hasta ahora; "jys" lo une al CRM (Fase 3).
+    networks: [default, jys]
+
+  # Base de datos del CRM. Sin "ports": no se publica fuera de Docker.
+  postgres:
+    image: postgres:16-alpine
+    container_name: jys-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jys
+      # Dueño de las tablas (migraciones). La aplicación usa el rol "jys_app", que crea el script de inicio.
+      POSTGRES_USER: ${POSTGRES_USER:-jys_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-}
+      TZ: America/Lima
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ../crm/docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    networks: [jys]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d jys"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API del CRM (FastAPI). Publicada solo en 127.0.0.1: no es accesible desde otros equipos ni por ngrok.
+  # Recibe solo las variables que necesita (no el .env completo) y se conecta como jys_app.
+  crm-api:
+    build: ../crm
+    image: jys-crm:latest
+    container_name: jys-crm
+    restart: unless-stopped
+    environment: &crm-env
+      CRM_DB_HOST: postgres
+      CRM_DB_NAME: jys
+      CRM_DB_USER: jys_app
+      CRM_DB_PASSWORD: ${POSTGRES_APP_PASSWORD:-}
+      CRM_SECRET_KEY: ${CRM_SECRET_KEY:-}
+      CRM_DATA_KEY_V1: ${CRM_DATA_KEY_V1:-}
+      CRM_DATA_KEY_V2: ${CRM_DATA_KEY_V2:-}
+      CRM_ACTIVE_KEY_VERSION: ${CRM_ACTIVE_KEY_VERSION:-1}
+      CRM_HMAC_KEY: ${CRM_HMAC_KEY:-}
+      CRM_BOT_API_KEY: ${CRM_BOT_API_KEY:-}
+      POLICY_VERSION: ${POLICY_VERSION:-}
+      RETENTION_LEADS_MONTHS: ${RETENTION_LEADS_MONTHS:-12}
+      BUSINESS_TIMEZONE: America/Lima
+      TZ: America/Lima
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks: [jys]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Herramientas del CRM: no queda corriendo (perfil "tools"). Es el único servicio con la clave del dueño
+  # de la BD (para migraciones y pruebas) y con CITAS_FILE_KEY + ./datos (solo lectura) para importar citas.
+  #   docker compose run --rm crm-tools alembic upgrade head
+  #   docker compose run --rm crm-tools python -m scripts.create_admin
+  #   docker compose run --rm crm-tools python -m scripts.importar_citas
+  #   docker compose run --rm crm-tools pytest
+  crm-tools:
+    image: jys-crm:latest
+    build: ../crm
+    profiles: [tools]
+    environment:
+      <<: *crm-env
+      CRM_DB_ADMIN_USER: ${POSTGRES_USER:-jys_owner}
+      CRM_DB_ADMIN_PASSWORD: ${POSTGRES_PASSWORD:-}
+      CITAS_FILE_KEY: ${CITAS_FILE_KEY:-}
+      CITAS_FILE_PATH: /data/datos/citas.jsonl.enc
+    volumes:
+      - ./datos:/data/datos:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [jys]
 
 volumes:
   n8n_data:
     name: n8n_data
+  pg_data:
+    name: jys_pg_data
+
+networks:
+  jys:
+    name: jys

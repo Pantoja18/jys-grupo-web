@@ -1,0 +1,3 @@
+# Los scripts de shell se montan en el contenedor de PostgreSQL (Linux): deben quedar con fin de línea LF
+# aunque Git en Windows convierta el resto a CRLF.
+*.sh text eol=lf
