@@ -109,5 +109,92 @@ class TestPuertaConsentimiento(unittest.TestCase):
         self.assertIsNone(out["appointment"])
 
 
+try:
+    import cryptography  # noqa: F401
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+
+
+@unittest.skipUnless(NODE and HAS_CRYPTO, "requiere Node.js y 'python -m pip install cryptography'")
+class TestCitasCifradas(unittest.TestCase):
+    """n8n cifra la cita (nodo Guardar cita cifrada) y herramientas/ver_citas.py la descifra."""
+
+    KEY = "0f" * 32
+
+    @classmethod
+    def setUpClass(cls):
+        import sys
+        sys.path.insert(0, str(HERE.parent / "herramientas"))
+        import ver_citas
+        cls.vc = ver_citas
+
+    def save(self, cita, file, store=None, key=None):
+        inp = {"from": FROM, "phoneNumberId": "100", "appointment": cita, "consentStatus": "otorgado", "policyVersion": "2026-10"}
+        return run_node("Guardar cita cifrada", inp, {"CITAS_FILE_KEY": key or self.KEY, "CITAS_FILE_PATH": str(file)},
+                        store if store is not None else granted())
+
+    def test_cifrar_en_n8n_y_descifrar_con_ver_citas(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as tmp:
+            file = Path(tmp) / "datos" / "citas.jsonl.enc"
+            out, store = self.save(CITA, file)
+            self.assertTrue(out["saved"])
+            out, store = self.save({**CITA, "correo": "maria@example.com"}, file, store)
+            self.assertTrue(out["saved"])
+            self.assertNotIn("María", file.read_text(encoding="ascii"))
+
+            citas, bad = self.vc.read_citas(file, self.vc.parse_key(self.KEY))
+            self.assertEqual(bad, 0)
+            self.assertEqual(len(citas), 2)
+            self.assertEqual(citas[0]["nombre"], "María Pérez Ríos")
+            self.assertEqual(citas[0]["consentimiento"]["version"], "2026-10")
+            latest = self.vc.latest_per_phone(citas)
+            self.assertEqual(len(latest), 1)
+            self.assertEqual(latest[0]["correo"], "maria@example.com")
+            table = self.vc.format_table(latest, width=400)
+            self.assertIn("María Pérez Ríos", table)
+            self.assertIn("Procesos de alimentos", table)
+
+            # Con otra clave no se descifra nada.
+            citas, bad = self.vc.read_citas(file, self.vc.parse_key("aa" * 32))
+            self.assertEqual((len(citas), bad), (0, 2))
+
+    def test_ver_citas_main_con_clave_del_entorno(self):
+        import io
+        import os
+        from contextlib import redirect_stdout
+        from tempfile import TemporaryDirectory
+        from unittest import mock
+        with TemporaryDirectory() as tmp:
+            file = Path(tmp) / "citas.jsonl.enc"
+            self.save(CITA, file)
+            buf = io.StringIO()
+            with mock.patch.dict(os.environ, {"CITAS_FILE_KEY": self.KEY}), redirect_stdout(buf):
+                code = self.vc.main(["--archivo", str(file)])
+            self.assertEqual(code, 0)
+            self.assertIn("María Pérez Ríos", buf.getvalue())
+            self.assertIn("1 solicitud(es)", buf.getvalue())
+            buf = io.StringIO()
+            with mock.patch.dict(os.environ, {"CITAS_FILE_KEY": "corta"}), redirect_stdout(buf):
+                self.assertEqual(self.vc.main(["--archivo", str(file)]), 2)
+            self.assertIn("64 caracteres", buf.getvalue())
+
+    def test_env_file_solo_lee_la_clave(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as tmp:
+            env = Path(tmp) / ".env"
+            env.write_text("META_ACCESS_TOKEN=secreto\nCITAS_FILE_KEY=" + self.KEY + "\n", encoding="utf-8")
+            self.assertEqual(self.vc.key_from_env_file(env), self.KEY)
+
+    def test_sin_clave_valida_no_se_guarda(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as tmp:
+            file = Path(tmp) / "citas.jsonl.enc"
+            out, _ = self.save(CITA, file, key="no-hex")
+            self.assertFalse(out["saved"])
+            self.assertFalse(file.exists())
+
+
 if __name__ == "__main__":
     unittest.main()

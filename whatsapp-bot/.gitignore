@@ -4,3 +4,6 @@
 # Resultados de la evaluación de modelos (respuestas completas del modelo)
 pruebas/resultados/
 __pycache__/
+
+# Registro cifrado de citas (datos personales) que escribe n8n
+datos/

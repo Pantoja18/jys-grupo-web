@@ -26,10 +26,14 @@ services:
       - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
       - NODE_FUNCTION_ALLOW_BUILTIN=fs,crypto
       - SYSTEM_PROMPT_PATH=/data/system_prompt.md
+      # Registro cifrado de solicitudes de cita (AES-256-GCM, clave CITAS_FILE_KEY en .env).
+      - CITAS_FILE_PATH=/data/datos/citas.jsonl.enc
     volumes:
       - n8n_data:/home/node/.n8n
       - ./system_prompt.md:/data/system_prompt.md:ro
       - ./n8n_workflow_template.json:/data/n8n_workflow_template.json:ro
+      # Carpeta local (excluida de git) donde n8n escribe datos/citas.jsonl.enc. Léala con herramientas/ver_citas.py.
+      - ./datos:/data/datos
 
 volumes:
   n8n_data:

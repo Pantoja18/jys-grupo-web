@@ -326,6 +326,92 @@ test('mensaje sin texto: respuesta directa sin la IA', () => {
   assert.strictEqual(g.waMessage.text.body, 'Disculpe, no pude leer su mensaje.');
 });
 
+// ---------- Guardar cita cifrada ----------
+
+const cryptoNode = require('crypto');
+const os = require('os');
+const KEY = 'ab'.repeat(32);
+
+function decryptLine(line, keyHex = KEY) {
+  assert.ok(line.startsWith('v1.'));
+  const raw = Buffer.from(line.slice(3), 'base64');
+  const d = cryptoNode.createDecipheriv('aes-256-gcm', Buffer.from(keyHex, 'hex'), raw.subarray(0, 12));
+  d.setAAD(Buffer.from('jys-citas-v1'));
+  d.setAuthTag(raw.subarray(raw.length - 16));
+  return JSON.parse(Buffer.concat([d.update(raw.subarray(12, raw.length - 16)), d.final()]).toString('utf8'));
+}
+
+function saveCita(appointment, { store = granted(), env = {} } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'citas-'));
+  const file = path.join(dir, 'sub', 'citas.jsonl.enc');
+  const input = { from: INPUT.from, phoneNumberId: '100', appointment, consentStatus: 'otorgado', policyVersion: '2026-10' };
+  const run = () => runCode('Guardar cita cifrada', { input, store, env: { CITAS_FILE_KEY: KEY, CITAS_FILE_PATH: file, ...env } })[0].json;
+  return { run, file, store };
+}
+const fs = require('fs');
+const path = require('path');
+
+test('el flujo guarda la cita cifrada solo si "¿Solicitud de cita?" es verdadero', () => {
+  assert.deepStrictEqual(wf.connections['¿Solicitud de cita?'].main[0].map((c) => c.node), ['Guardar cita cifrada']);
+  assert.deepStrictEqual(wf.connections['Guardar cita cifrada'].main[0].map((c) => c.node).sort(), ['¿Avisar por WhatsApp?', '¿Webhook configurado?']);
+  assert.strictEqual(wf.connections['¿Avisar por WhatsApp?'].main[0][0].node, 'Avisar al estudio (WhatsApp)');
+  assert.strictEqual(wf.connections['¿Webhook configurado?'].main[0][0].node, 'Notificar al estudio (cita)');
+  for (const n of ['Avisar al estudio (WhatsApp)', 'Notificar al estudio (cita)']) assert.strictEqual(nodes[n].onError, 'continueRegularOutput');
+  assert.ok(!nodes['Guardar cita cifrada'].parameters.jsCode.includes("require('path')"), 'n8n solo permite fs y crypto');
+});
+
+test('con consentimiento, <cita> válido → hasAppointment y se cifra con AES-256-GCM (cifrar y descifrar)', () => {
+  const { out } = parse({ message: { content: `Gracias.\n<cita>${CITA}</cita>` } });
+  assert.strictEqual(out.hasAppointment, true);
+  const { run, file } = saveCita(out.appointment);
+  const r = run();
+  assert.strictEqual(r.saved, true);
+  const lines = fs.readFileSync(file, 'utf8').trim().split('\n');
+  assert.strictEqual(lines.length, 1);
+  assert.ok(!lines[0].includes('María'), 'el archivo no debe contener texto plano');
+  const rec = decryptLine(lines[0]);
+  assert.strictEqual(rec.nombre, 'María Pérez Ríos');
+  assert.strictEqual(rec.telefono, INPUT.from);
+  assert.strictEqual(rec.consentimiento.version, '2026-10');
+  assert.strictEqual(rec.consentimiento.estado, 'otorgado');
+  assert.throws(() => decryptLine(lines[0], 'cd'.repeat(32)), 'con otra clave no se descifra');
+});
+
+test('la misma cita no se guarda dos veces; una cita actualizada sí', () => {
+  const { run, file, store } = saveCita(JSON.parse(CITA));
+  assert.strictEqual(run().saved, true);
+  assert.strictEqual(run().duplicate, true);
+  const r = runCode('Guardar cita cifrada', { input: { from: INPUT.from, appointment: { ...JSON.parse(CITA), correo: 'm@example.com' } }, store, env: { CITAS_FILE_KEY: KEY, CITAS_FILE_PATH: file } })[0].json;
+  assert.strictEqual(r.saved, true);
+  assert.strictEqual(fs.readFileSync(file, 'utf8').trim().split('\n').length, 2);
+});
+
+test('aviso al estudio: una vez, sin datos sensibles, y solo si hay número o webhook', () => {
+  const { run } = saveCita(JSON.parse(CITA), { env: { FIRM_NOTIFY_WHATSAPP: '+51 900 000 001' } });
+  const r = run();
+  assert.strictEqual(r.notifyWhatsApp, true);
+  assert.strictEqual(r.notifyWebhook, false);
+  assert.strictEqual(r.notifyTo, '51900000001');
+  assert.strictEqual(r.notice, 'Nueva solicitud de cita – área: Procesos de alimentos – modalidad: presencial. Revise el registro.');
+  for (const s of ['María', INPUT.from, 'Pensión']) assert.ok(!r.notice.includes(s), s);
+  const { run: sinNumero } = saveCita(JSON.parse(CITA));
+  assert.strictEqual(sinNumero().notifyWhatsApp, false);
+  // Incompleta: se guarda, pero todavía no se avisa.
+  const { run: incompleta } = saveCita({ ...JSON.parse(CITA), estado: 'incompleta' }, { env: { FIRM_NOTIFY_WHATSAPP: '51900000001' } });
+  const i = incompleta();
+  assert.strictEqual(i.saved, true);
+  assert.strictEqual(i.notifyWhatsApp, false);
+});
+
+test('sin CITAS_FILE_KEY válida no se escribe nada y el aviso lo advierte', () => {
+  const { run, file } = saveCita(JSON.parse(CITA), { env: { CITAS_FILE_KEY: '1234', FIRM_NOTIFY_WHATSAPP: '51900000001' } });
+  const r = run();
+  assert.strictEqual(r.saved, false);
+  assert.ok(r.error.includes('CITAS_FILE_KEY'));
+  assert.ok(!fs.existsSync(file));
+  assert.ok(r.notice.includes('no se pudo guardar'));
+});
+
 // ---------- Extraer mensaje ----------
 
 test('Extraer mensaje: lee el id del botón de consentimiento', () => {

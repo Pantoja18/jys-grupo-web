@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → LLM (Ollama local o Claude, según `LLM_PROVIDER`) → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato y se extrae el texto.\n3. *Puerta de consentimiento* (sin IA, Ley 29733): si no hay consentimiento y se pide una cita o se dan datos, envía el mensaje fijo con botones **Acepto / No acepto** y registra la respuesta.\n4. El resto va al LLM con la línea `Consentimiento: ...`; un filtro de salida bloquea pedidos de datos sin consentimiento.\n5. Si el modelo emite un bloque `<cita>` y hay consentimiento, se notifica al estudio.\n\nLas ejecuciones exitosas y manuales **no se guardan** (Ley 29733). Variables: ver `.env.example`.",
+        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → LLM (Ollama local o Claude, según `LLM_PROVIDER`) → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato y se extrae el texto.\n3. *Puerta de consentimiento* (sin IA, Ley 29733): si no hay consentimiento y se pide una cita o se dan datos, envía el mensaje fijo con botones **Acepto / No acepto** y registra la respuesta.\n4. El resto va al LLM con la línea `Consentimiento: ...`; un filtro de salida bloquea pedidos de datos sin consentimiento.\n5. Si el modelo emite un bloque `<cita>` y hay consentimiento, se guarda **cifrada** (AES-256-GCM) en `datos/citas.jsonl.enc` y, opcionalmente, se avisa al estudio por WhatsApp (sin datos sensibles) o por webhook.\n\nLas ejecuciones exitosas y manuales **no se guardan** (Ley 29733). Variables: ver `.env.example`.",
         "height": 320,
         "width": 520
       },
@@ -262,15 +262,17 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ firma: 'JS CONSULTORES Y ABOGADOS', canal: 'whatsapp', telefono: $json.from, solicitud: $json.appointment, recibido: $now.toISO() }) }}",
-        "options": {}
+        "options": {
+          "timeout": 15000
+        }
       },
       "id": "c7ffb758-2dc3-4f85-b1eb-e95578ecbaa9",
       "name": "Notificar al estudio (cita)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1980,
-        40
+        2420,
+        140
       ],
       "onError": "continueRegularOutput",
       "notes": "Reemplazar por Google Sheets, Gmail, Google Calendar o el CRM del estudio."
@@ -398,6 +400,119 @@
         260
       ],
       "id": "7dff2359-92db-499e-b322-f00fe5582d1b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Guarda la solicitud de cita CIFRADA (AES-256-GCM) en un archivo local: una línea por cita en\n// CITAS_FILE_PATH (por defecto /data/datos/citas.jsonl.enc, carpeta ./datos montada en docker-compose).\n// Formato de cada línea: \"v1.\" + base64(iv de 12 bytes | texto cifrado | etiqueta de 16 bytes),\n// con AAD \"jys-citas-v1\". Se lee con herramientas/ver_citas.py.\n// Solo llega aquí una cita válida con consentimiento otorgado (ver \"Procesar respuesta\").\nconst crypto = require('crypto');\nconst fs = require('fs');\nconst input = $input.first().json;\nconst store = $getWorkflowStaticData('global');\nstore.citas = store.citas || {};\nconst ttlMs = parseInt($env.CONVERSATION_TTL_HOURS || '24', 10) * 3600 * 1000;\n\nconst KEYS = ['nombre', 'area', 'resumen', 'tipo_cliente', 'modalidad', 'preferencia_horaria', 'correo', 'urgente', 'contacto_humano', 'estado'];\nconst cita = Object.fromEntries(KEYS.map((k) => [k, input.appointment?.[k] ?? '']));\nconst consent = store.consents?.[input.from] || {};\n\n// Mismo contenido que la última línea guardada para este número: no se repite.\nlet track = store.citas[input.from];\nif (!track || Date.now() - track.updatedAt > ttlMs) track = { hash: '', notified: false };\nconst hash = crypto.createHash('sha256').update(input.from + JSON.stringify(cita)).digest('hex');\nconst duplicate = hash === track.hash;\n\nlet saved = false;\nlet error = '';\nif (!duplicate) {\n  const keyHex = ($env.CITAS_FILE_KEY || '').trim();\n  if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) {\n    error = 'CITAS_FILE_KEY no está configurada o no tiene 64 caracteres hexadecimales (32 bytes).';\n  } else {\n    const record = {\n      registrado: new Date().toISOString(),\n      telefono: input.from,\n      linea: input.phoneNumberId || '',\n      consentimiento: { estado: consent.estado || input.consentStatus, version: consent.version || input.policyVersion, fecha: consent.fecha || '' },\n      ...cita,\n    };\n    const iv = crypto.randomBytes(12);\n    const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(keyHex, 'hex'), iv);\n    cipher.setAAD(Buffer.from('jys-citas-v1'));\n    const ct = Buffer.concat([cipher.update(JSON.stringify(record), 'utf8'), cipher.final()]);\n    const line = 'v1.' + Buffer.concat([iv, ct, cipher.getAuthTag()]).toString('base64');\n    const file = $env.CITAS_FILE_PATH || '/data/datos/citas.jsonl.enc';\n    try {\n      fs.mkdirSync(file.replace(/[\\\\/][^\\\\/]*$/, '') || '.', { recursive: true }); // solo fs y crypto están permitidos\n      fs.appendFileSync(file, line + '\\n', { mode: 0o600 });\n      saved = true;\n    } catch (e) {\n      error = `No se pudo escribir ${file}: ${e.code || e.message}`;\n    }\n  }\n  // Sin datos personales en el log: solo el motivo.\n  if (error) console.error(`[Guardar cita cifrada] ${error}`);\n}\n\n// Aviso al estudio una sola vez por conversación, cuando la solicitud está completa o pide atención\n// humana o es urgente (el modelo reenvía el bloque <cita> en cada turno).\nconst notifiable = cita.estado === 'completa' || cita.contacto_humano === true || cita.urgente === true;\nconst notify = !duplicate && notifiable && !track.notified;\nstore.citas[input.from] = { hash: saved || duplicate ? hash : track.hash, notified: track.notified || notify, updatedAt: Date.now() };\n\nconst notifyNumber = ($env.FIRM_NOTIFY_WHATSAPP || '').replace(/\\D/g, '');\nconst area = cita.area || 'sin indicar';\nconst modalidad = cita.modalidad || 'por_definir';\nconst flags = [cita.urgente === true ? 'URGENTE' : '', cita.contacto_humano === true ? 'pide hablar con una persona' : ''].filter(Boolean).join(', ');\n// Sin datos sensibles: ni nombre, ni teléfono, ni resumen del caso.\nconst notice = `Nueva solicitud de cita – área: ${area} – modalidad: ${modalidad}${flags ? ` – ${flags}` : ''}. Revise el registro.`\n  + (saved || duplicate ? '' : ' (ATENCIÓN: no se pudo guardar en el registro cifrado; revise los logs de n8n.)');\n\nreturn [{\n  json: {\n    from: input.from,\n    phoneNumberId: input.phoneNumberId,\n    appointment: input.appointment,\n    saved,\n    duplicate,\n    error,\n    notifyWhatsApp: notify && notifyNumber.length >= 8,\n    notifyWebhook: notify && !!($env.FIRM_NOTIFICATION_WEBHOOK_URL || '').trim(),\n    notifyTo: notifyNumber,\n    notice,\n  },\n}];\n"
+      },
+      "name": "Guardar cita cifrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        60
+      ],
+      "id": "b66d020e-62c8-420b-abdb-0def9bbceb17"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "22efcee0-2c6c-40e9-b570-064f922b9352",
+              "leftValue": "={{ $json.notifyWhatsApp }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "¿Avisar por WhatsApp?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        -40
+      ],
+      "id": "86cefd39-0942-41aa-8094-7f84423cd20f"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "3c2f48be-37f3-461c-a99f-c645eff4e0e9",
+              "leftValue": "={{ $json.notifyWebhook }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "¿Webhook configurado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        160
+      ],
+      "id": "78221332-034d-4f16-92ba-b91d5924ff12"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.META_API_VERSION || 'v21.0' }}/{{ $json.phoneNumberId || $env.PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.META_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.notifyTo, type: 'text', text: { preview_url: false, body: $json.notice } }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "name": "Avisar al estudio (WhatsApp)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        -60
+      ],
+      "onError": "continueRegularOutput",
+      "id": "27cd7cc3-d5ac-46af-8d50-53e33f75c020"
     }
   ],
   "connections": {
@@ -472,7 +587,7 @@
       "main": [
         [
           {
-            "node": "Notificar al estudio (cita)",
+            "node": "Guardar cita cifrada",
             "type": "main",
             "index": 0
           }
@@ -558,6 +673,46 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Guardar cita cifrada": {
+      "main": [
+        [
+          {
+            "node": "¿Avisar por WhatsApp?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "¿Webhook configurado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Avisar por WhatsApp?": {
+      "main": [
+        [
+          {
+            "node": "Avisar al estudio (WhatsApp)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "¿Webhook configurado?": {
+      "main": [
+        [
+          {
+            "node": "Notificar al estudio (cita)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

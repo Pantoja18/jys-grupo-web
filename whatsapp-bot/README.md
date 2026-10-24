@@ -50,7 +50,8 @@ El proveedor se elige con **`LLM_PROVIDER`** en el `.env`; el nodo **¿Usar Clau
 4. **Preparar solicitud LLM**: lee `system_prompt.md`, le agrega al final la línea `Consentimiento: otorgado|pendiente|rechazado`, recupera el historial del número (máx. `CONVERSATION_MAX_MESSAGES`, se reinicia tras `CONVERSATION_TTL_HOURS`) y arma el cuerpo de la petición.
 5. **¿Usar Claude?** → **Claude (Messages API)** si `LLM_PROVIDER=anthropic` (tiempo de espera 2 min, 3 intentos), o **Ollama (chat local)** en otro caso (`POST {OLLAMA_URL}/api/chat`, 5 min, 2 intentos).
 6. **Procesar respuesta**: si el LLM falla o rechaza la solicitud responde con un mensaje de cortesía, retira todos los bloques `<cita>{…}</cita>` (usa el último válido) y las etiquetas sueltas, recorta a los límites de WhatsApp y guarda el turno en memoria. **Filtro de salida:** si no hay consentimiento otorgado y la respuesta pide nombre, correo, DNI, teléfono o dirección, se reemplaza por el mensaje de consentimiento con botones. Sin consentimiento, ningún bloque `<cita>` se registra.
-7. **Enviar respuesta WhatsApp** (texto o mensaje interactivo, según `waMessage`) y, si hubo bloque `<cita>` con consentimiento, **Notificar al estudio** con el JSON de la solicitud.
+7. **Enviar respuesta WhatsApp** (texto o mensaje interactivo, según `waMessage`).
+8. Si hubo bloque `<cita>` válido **con consentimiento otorgado**: **Guardar cita cifrada** en `datos/citas.jsonl.enc` (ver *Citas*) y, una sola vez por conversación (cuando la solicitud está completa, es urgente o pide atención humana), **Avisar al estudio (WhatsApp)** si `FIRM_NOTIFY_WHATSAPP` tiene un número y **Notificar al estudio (cita)** si `FIRM_NOTIFICATION_WEBHOOK_URL` tiene una URL.
 
 ### Flujo conversacional (definido en `system_prompt.md`)
 
@@ -68,6 +69,9 @@ Saludo → filtrado del caso (área, resumen, urgencia, persona natural/empresa)
 ├── GUIA_META_NGROK.md           # Paso a paso detallado de Meta y ngrok
 ├── ESTADO_PROYECTO.md           # Estado actual y próximos pasos
 ├── CLAUDE.md                    # Contexto y reglas para Claude Code
+├── herramientas/
+│   └── ver_citas.py             # Descifra y muestra datos/citas.jsonl.enc
+├── datos/                       # Registro cifrado de citas (lo crea n8n; excluido de git)
 ├── pruebas/
 │   ├── evaluar_modelos.py       # Batería conversacional contra Ollama (comparar modelos)
 │   ├── test_evaluar_modelos.py  # Pruebas del evaluador y del system prompt
@@ -107,7 +111,35 @@ La sección **Base de conocimiento** de `system_prompt.md` se tomó de la web of
 
 Tras editar el archivo, los cambios aplican en el siguiente mensaje (no requiere reimportar el flujo).
 
-Para enviar las citas a otro destino, reemplace el nodo **Notificar al estudio (cita)** por Google Sheets, Gmail, Google Calendar o el CRM del estudio.
+Para enviar las citas a otro destino, reemplace el nodo **Notificar al estudio (cita)** por Google Sheets, Gmail, Google Calendar o el CRM del estudio (en la Fase 3 se guardarán en el CRM, ver `../crm/ARQUITECTURA.md`).
+
+## Citas: registro cifrado y aviso al estudio
+
+Cada solicitud de cita (bloque `<cita>` válido, **solo con consentimiento otorgado**) se agrega como una línea cifrada en `whatsapp-bot/datos/citas.jsonl.enc`:
+
+- Cifrado **AES-256-GCM** (módulo `crypto` de n8n) con la clave `CITAS_FILE_KEY` (32 bytes en hex). Cada línea es `v1.` + base64(IV de 12 bytes | texto cifrado | etiqueta de 16 bytes), con AAD `jys-citas-v1`. Incluye fecha, teléfono, línea de WhatsApp, versión y fecha del consentimiento y los campos del bloque `<cita>`.
+- La carpeta `datos/` se monta en el contenedor como `/data/datos` y está excluida de git. Haga copias de respaldo de esa carpeta **y** guarde la clave en un gestor de contraseñas: **sin la clave, las citas son irrecuperables**.
+- El modelo reenvía el bloque en cada turno: si el contenido no cambió no se repite la línea; si cambió (p. ej. agregó el correo), se agrega una nueva.
+- Si `CITAS_FILE_KEY` falta o está mal formada, la cita **no** se guarda; el aviso al estudio lo indica y el log de n8n muestra el motivo (sin datos personales).
+
+Generar la clave en PowerShell (una sola vez; cópiela en `CITAS_FILE_KEY=` del `.env` y en su gestor de contraseñas):
+```powershell
+$b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })
+```
+
+Ver las citas (desde `whatsapp-bot/`; requiere `python -m pip install cryptography`):
+```powershell
+python herramientas/ver_citas.py --env-file .env          # toma solo CITAS_FILE_KEY del .env
+python herramientas/ver_citas.py --env-file .env --todas  # todas las versiones de cada solicitud
+```
+También acepta la clave en `$env:CITAS_FILE_KEY`. Los datos descifrados solo se muestran en pantalla.
+
+**Aviso por WhatsApp (opcional):** si `FIRM_NOTIFY_WHATSAPP` tiene un número (solo dígitos, con código de país), n8n le envía, desde la misma línea que atendió, un aviso **sin datos sensibles**: *"Nueva solicitud de cita – área: X – modalidad: Y. Revise el registro."* Limitaciones:
+- **Ventana de 24 h de Meta:** el mensaje libre solo se entrega si ese número escribió a la línea del bot en las últimas 24 h. Para avisos sin esa restricción hace falta una plantilla aprobada por Meta (pendiente).
+- **Número de prueba de Meta:** solo envía a destinatarios verificados (*WhatsApp → Configuración de la API → Para*); agregue allí el número del estudio.
+- Si el envío falla, el flujo continúa (`onError: continueRegularOutput`): la cita ya quedó guardada.
+
+**Webhook (opcional):** `FIRM_NOTIFICATION_WEBHOOK_URL` sigue disponible y recibe la solicitud completa en JSON (incluye datos personales: úselo solo con un destino seguro).
 
 ## Seguridad y producción
 
@@ -115,6 +147,7 @@ Para enviar las citas a otro destino, reemplace el nodo **Notificar al estudio (
 - **Memoria**: la plantilla guarda el historial en *static data* de n8n, que solo persiste en ejecuciones de producción y no escala a varios workers. Para volumen real, use Redis o Postgres.
 - **Mensajes simultáneos**: si un usuario envía varios mensajes seguidos, pueden procesarse en paralelo. Considere un *debounce* (agrupar mensajes durante unos segundos) o una cola por número.
 - **Ventana de 24 h**: WhatsApp solo permite mensajes libres dentro de las 24 h posteriores al último mensaje del usuario. Para confirmaciones posteriores, use plantillas aprobadas por Meta.
+- **Citas**: el registro `datos/citas.jsonl.enc` está cifrado, pero la clave vive en `.env` del mismo equipo; active el cifrado de disco (BitLocker / Cifrado del dispositivo) y restrinja el acceso al equipo.
 - **Datos personales**: las conversaciones contienen datos sensibles. Limite la retención (el flujo ya trae `saveDataSuccessExecution: none` y `saveManualExecutions: false`; si los cambia para depurar, restáurelos; las ejecuciones con error sí se guardan y pueden contener el mensaje), restrinja el acceso a n8n y cumpla la Ley N.° 29733 y su reglamento.
 - **Secretos**: mantenga `.env` fuera del repositorio (incluido en `.gitignore`).
 
