@@ -12,6 +12,16 @@ cp .env.example .env
 ```
 Complete las variables obligatorias: `OLLAMA_URL`, `OLLAMA_MODEL`, `META_ACCESS_TOKEN`, `PHONE_NUMBER_ID`, `WEBHOOK_VERIFY_TOKEN` y `N8N_ENCRYPTION_KEY`. `WEBHOOK_URL` se completa en el paso 3.
 
+Para el flujo v3 complete también (ver `README.md` → *Citas*):
+- `POLICY_VERSION=2026-10`
+- `CITAS_FILE_KEY=` con una clave generada en PowerShell (cópiela también a su gestor de contraseñas):
+  ```powershell
+  $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString('x2') })
+  ```
+- `TEST_NUMBERS=` su número de pruebas (para `/reiniciar`).
+- `FIRM_NOTIFY_WHATSAPP=` (opcional) el número del estudio que recibirá los avisos; con el número de prueba de Meta debe estar en la lista de destinatarios verificados y haber escrito a la línea en las últimas 24 h.
+- `OLLAMA_NUM_PREDICT=200`.
+
 ## Paso 2 – Iniciar n8n
 
 Verifique primero que Ollama responde (en el equipo anfitrión):
@@ -49,6 +59,25 @@ Envíe un WhatsApp al número de prueba desde un número registrado como destina
 
 **Repetir una prueba desde cero:** ponga su número en `TEST_NUMBERS` del `.env` (con código de país, p. ej. `51XXXXXXXXX`; varios separados por comas), aplique con `docker compose up -d --force-recreate` y escriba `/reiniciar` por WhatsApp. Valeria responde *"Conversación reiniciada."* y olvida el historial y el consentimiento de ese número. Desde otros números, `/reiniciar` se trata como un mensaje normal.
 
+## Pasar del flujo v2 al v3 (consentimiento con botones y citas cifradas)
+
+1. Agregue al `.env` las variables del Paso 1 y aplique: `docker compose up -d --force-recreate` (también monta la carpeta `datos/`).
+2. En n8n: *Workflows → Import from File* → `n8n_workflow_template.json`. Se crea **"JS CONSULTORES Y ABOGADOS - Valeria v3 (consentimiento y citas)"**.
+3. Abra el v2 y **desactívelo** (solo un flujo puede atender `/webhook/whatsapp`); luego abra el v3 y **actívelo / publíquelo**.
+4. En el v3, *Settings* debe mostrar *Save successful production executions: Do not save* y *Save manual executions: No* (vienen así en la plantilla).
+
+**Batería por WhatsApp del v3** (con datos ficticios; empiece con `/reiniciar`):
+
+| # | Envíe | Esperado |
+|---|---|---|
+| 1 | `Hola` | Saludo según la hora, presentación una sola vez, *escribiendo…* mientras responde |
+| 2 | `Quiero una cita` | Al instante, el mensaje fijo de consentimiento con botones **Acepto / No acepto** (sin IA) |
+| 3 | Pulse **No acepto** | "Entendido, no usaremos sus datos…" con los canales directos; no pide datos |
+| 4 | `Quiero una cita` → **Acepto** | "Gracias, hemos registrado su autorización. ¿Me indica su nombre completo…?" |
+| 5 | Nombre, tema, modalidad, día, correo | Un dato por mensaje y un resumen como **solicitud** |
+| 6 | `python herramientas/ver_citas.py --env-file .env` | La solicitud aparece en la tabla |
+| 7 | `/reiniciar` | "Conversación reiniciada." (solo desde `TEST_NUMBERS`) |
+
 ## Comparar modelos de Ollama (Fase 0)
 
 La batería conversacional (`pruebas/evaluar_modelos.py`) envía a Ollama los mismos mensajes que n8n, con datos ficticios, y revisa automáticamente tuteo, asesoría legal, consentimiento antes de pedir datos y el bloque `<cita>`. No usa n8n, ngrok ni WhatsApp. Requiere Python 3.9 o superior (solo la biblioteca estándar).
@@ -62,11 +91,15 @@ python pruebas/evaluar_modelos.py --modelos llama3:latest qwen2.5:7b llama3.1:8b
 - Para repetir solo algunos casos: `--casos 4 5 6`. Para más repeticiones: `--repeticiones 3`.
 - Las revisiones automáticas son aproximadas: lea las respuestas del informe antes de elegir. Luego ponga el elegido en `OLLAMA_MODEL` y ejecute `docker compose up -d --force-recreate`.
 
-Pruebas del código (no necesitan Ollama):
+Pruebas del código (no necesitan Ollama ni n8n):
 ```powershell
+python -m pip install cryptography        # una vez (lo usan ver_citas.py y sus pruebas)
 python -m unittest discover -s pruebas -v
-docker run --rm -v "${PWD}:/w" -w /w node:20-alpine node pruebas/test_flujo.js
+node pruebas/test_flujo.js                # o, sin Node: docker run --rm -v "${PWD}:/w" -w /w node:20-alpine node pruebas/test_flujo.js
 ```
+`test_flujo_n8n.py` ejecuta los nodos del flujo con Node; si Node no está instalado, esas pruebas se omiten.
+
+La batería `evaluar_modelos.py` habla directo con Ollama, **sin** la puerta de consentimiento de n8n: sus casos de consentimiento miden al modelo, mientras que la garantía real ya la da el flujo v3.
 
 ## Verificar el estado de Docker
 
@@ -85,5 +118,8 @@ Para detener: `docker compose down` (los datos se conservan en el volumen). Para
 - **La URL de ngrok cambió** (plan gratuito, al reiniciar ngrok): repita los pasos 3 y 4.
 - **No llegan respuestas:** el token temporal de Meta vence en 24 h; revise también que su número esté como destinatario de prueba.
 - **Valeria responde con el mensaje de disculpa:** Ollama no está corriendo, el contenedor no lo alcanza (ver Paso 2) o falta `ollama pull llama3`. Revise el error del nodo *Ollama (chat local)* en n8n → *Executions*.
-- **Respuestas lentas:** en CPU, Llama 3 puede tardar decenas de segundos por mensaje; la primera respuesta es más lenta porque carga el modelo.
+- **Respuestas lentas:** en CPU, Llama 3 puede tardar decenas de segundos por mensaje; la primera respuesta es más lenta porque carga el modelo. Use `OLLAMA_NUM_PREDICT=200` (ver README → *Velocidad*). El indicador *escribiendo…* dura como máximo 25 s.
+- **No aparece "escribiendo…":** revise el error del nodo *Indicador escribiendo* en n8n; según Meta, requiere un token de sistema o de empresa. Si falla, Valeria responde igual.
+- **La cita no aparece en `ver_citas.py`:** solo se guarda con consentimiento otorgado y si `CITAS_FILE_KEY` tiene 64 caracteres hex; el log de n8n (`docker compose logs n8n`) muestra `[Guardar cita cifrada] ...` con el motivo.
+- **No llega el aviso al estudio por WhatsApp:** fuera de la ventana de 24 h Meta no entrega mensajes libres, y el número de prueba solo envía a destinatarios verificados.
 - **Cambios en `system_prompt.md`:** se aplican en el siguiente mensaje, sin reiniciar.
