@@ -8,7 +8,7 @@
 
 'use strict';
 const assert = require('assert');
-const { wf, nodes, runCode } = require('./nodos_n8n');
+const { wf, nodes, runCode, evalParam } = require('./nodos_n8n');
 
 const INPUT = { from: '51900000000', messageId: 'wamid.T1', contactName: 'Prueba', phoneNumberId: '100', text: 'Hola', buttonId: '', needsAI: true, directReply: '' };
 const POLICY = { POLICY_VERSION: '2026-10' };
@@ -410,6 +410,45 @@ test('sin CITAS_FILE_KEY válida no se escribe nada y el aviso lo advierte', () 
   assert.ok(r.error.includes('CITAS_FILE_KEY'));
   assert.ok(!fs.existsSync(file));
   assert.ok(r.notice.includes('no se pudo guardar'));
+});
+
+// ---------- Indicador "escribiendo…" ----------
+
+test('indicador de escritura: solo en el camino a la IA, antes de Preparar solicitud LLM', () => {
+  assert.strictEqual(wf.connections['¿Llamar a la IA?'].main[0][0].node, 'Indicador escribiendo');
+  assert.strictEqual(wf.connections['Indicador escribiendo'].main[0][0].node, 'Preparar solicitud LLM');
+  assert.strictEqual(wf.connections['¿Llamar a la IA?'].main[1][0].node, 'Enviar respuesta WhatsApp');
+});
+
+test('indicador de escritura: formato de Meta (status "read" + typing_indicator) y nunca bloquea', () => {
+  const n = nodes['Indicador escribiendo'];
+  assert.strictEqual(n.onError, 'continueRegularOutput');
+  assert.ok(!n.retryOnFail);
+  assert.strictEqual(n.parameters.method, 'POST');
+  const g = gate({ text: 'Hola', messageId: 'wamid.ABC', phoneNumberId: '200' });
+  const body = JSON.parse(evalParam(n.parameters.jsonBody, { $json: g }));
+  assert.deepStrictEqual(body, { messaging_product: 'whatsapp', status: 'read', message_id: 'wamid.ABC', typing_indicator: { type: 'text' } });
+  // Responde por la línea (phone_number_id) del mensaje entrante.
+  const url = evalParam(n.parameters.url, { $json: g, $env: { META_API_VERSION: 'v25.0', PHONE_NUMBER_ID: '999' } });
+  assert.strictEqual(url, 'https://graph.facebook.com/v25.0/200/messages');
+  assert.ok(evalParam(n.parameters.headerParameters.parameters[0].value, { $env: { META_ACCESS_TOKEN: 'x' } }) === 'Bearer x');
+});
+
+test('si el indicador falla, Preparar solicitud LLM usa igual los datos de la puerta', () => {
+  const g = gate({ text: 'Hola' });
+  const ctx = runCode('Preparar solicitud LLM', { input: { error: { message: '(#131000) Something went wrong' } }, env: POLICY, store: {}, refs: { 'Puerta de consentimiento': g } })[0].json;
+  assert.strictEqual(ctx.from, INPUT.from);
+  assert.ok(ctx.llmBody.messages.at(-1).content.endsWith('Hola'));
+});
+
+test('Enviar respuesta WhatsApp arma texto o interactivo y usa la línea entrante', () => {
+  const n = nodes['Enviar respuesta WhatsApp'];
+  const g = gate({ text: 'Quiero una cita', phoneNumberId: '300' });
+  const body = JSON.parse(evalParam(n.parameters.jsonBody, { $json: g }));
+  assert.strictEqual(body.to, INPUT.from);
+  assert.strictEqual(body.type, 'interactive');
+  assert.strictEqual(body.messaging_product, 'whatsapp');
+  assert.strictEqual(evalParam(n.parameters.url, { $json: g, $env: { META_API_VERSION: 'v25.0' } }), 'https://graph.facebook.com/v25.0/300/messages');
 });
 
 // ---------- Extraer mensaje ----------

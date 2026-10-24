@@ -35,6 +35,16 @@ def run_node(node, input, env=None, store=None, refs=None):
     return (out[0]["json"] if out else None), data["store"]
 
 
+def eval_param(node, key, json_data, env=None):
+    """Evalúa una expresión {{ ... }} de un parámetro de nodo, como lo haría n8n."""
+    req = {"param": [node, key], "json": json_data, "env": env or {}}
+    proc = subprocess.run([NODE, str(RUNNER)], input=json.dumps(req), capture_output=True, text=True, encoding="utf-8")
+    data = json.loads(proc.stdout or "{}")
+    if "error" in data or proc.returncode:
+        raise AssertionError(data.get("error") or proc.stderr)
+    return data["value"]
+
+
 def message(text, button_id="", **extra):
     return {"from": FROM, "messageId": "wamid.T", "contactName": "Prueba", "phoneNumberId": "100", "text": text,
             "buttonId": button_id, "needsAI": True, "directReply": "", **extra}
@@ -107,6 +117,25 @@ class TestPuertaConsentimiento(unittest.TestCase):
         out, _, _ = llm_turn("Hola", "Gracias.\n<cita>" + json.dumps(CITA, ensure_ascii=False) + "</cita>", {})
         self.assertFalse(out["hasAppointment"])
         self.assertIsNone(out["appointment"])
+
+
+@unittest.skipUnless(NODE, "Node.js no está instalado")
+class TestIndicadorEscribiendo(unittest.TestCase):
+    def test_cuerpo_y_url_del_indicador(self):
+        g, _ = gate("Hola", messageId="wamid.XYZ", phoneNumberId="200")
+        body = json.loads(eval_param("Indicador escribiendo", "jsonBody", g))
+        self.assertEqual(body, {"messaging_product": "whatsapp", "status": "read", "message_id": "wamid.XYZ",
+                                "typing_indicator": {"type": "text"}})
+        url = eval_param("Indicador escribiendo", "url", g, {"META_API_VERSION": "v25.0"})
+        self.assertEqual(url, "https://graph.facebook.com/v25.0/200/messages")
+
+    def test_un_fallo_del_indicador_no_bloquea(self):
+        wf = json.loads((HERE.parent / "n8n_workflow_template.json").read_text(encoding="utf-8"))
+        node = next(n for n in wf["nodes"] if n["name"] == "Indicador escribiendo")
+        self.assertEqual(node.get("onError"), "continueRegularOutput")
+        g, store = gate("Hola")
+        ctx, _ = run_node("Preparar solicitud LLM", {"error": {"message": "fallo"}}, None, store, {"Puerta de consentimiento": g})
+        self.assertEqual(ctx["from"], FROM)
 
 
 try:

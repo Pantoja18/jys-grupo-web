@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → LLM (Ollama local o Claude, según `LLM_PROVIDER`) → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato y se extrae el texto.\n3. *Puerta de consentimiento* (sin IA, Ley 29733): si no hay consentimiento y se pide una cita o se dan datos, envía el mensaje fijo con botones **Acepto / No acepto** y registra la respuesta.\n4. El resto va al LLM con la línea `Consentimiento: ...`; un filtro de salida bloquea pedidos de datos sin consentimiento.\n5. Si el modelo emite un bloque `<cita>` y hay consentimiento, se guarda **cifrada** (AES-256-GCM) en `datos/citas.jsonl.enc` y, opcionalmente, se avisa al estudio por WhatsApp (sin datos sensibles) o por webhook.\n\nLas ejecuciones exitosas y manuales **no se guardan** (Ley 29733). Variables: ver `.env.example`.",
+        "content": "## JS CONSULTORES Y ABOGADOS – Valeria (asistente WhatsApp)\n\n**Flujo:** WhatsApp Cloud API → n8n → LLM (Ollama local o Claude, según `LLM_PROVIDER`) → WhatsApp.\n\n1. *Verificación (GET)*: Meta valida el webhook con `hub.verify_token`.\n2. *Mensajes (POST)*: se responde 200 de inmediato y se extrae el texto.\n3. *Puerta de consentimiento* (sin IA, Ley 29733): si no hay consentimiento y se pide una cita o se dan datos, envía el mensaje fijo con botones **Acepto / No acepto** y registra la respuesta.\n4. El resto marca el mensaje como leído y muestra *escribiendo…* (si falla, sigue igual) y va al LLM con la línea `Consentimiento: ...`; un filtro de salida bloquea pedidos de datos sin consentimiento.\n5. Si el modelo emite un bloque `<cita>` y hay consentimiento, se guarda **cifrada** (AES-256-GCM) en `datos/citas.jsonl.enc` y, opcionalmente, se avisa al estudio por WhatsApp (sin datos sensibles) o por webhook.\n\nLas ejecuciones exitosas y manuales **no se guardan** (Ley 29733). Variables: ver `.env.example`.",
         "height": 320,
         "width": 520
       },
@@ -137,7 +137,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
+        1100,
         160
       ]
     },
@@ -166,7 +166,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1320,
+        1540,
         280
       ],
       "retryOnFail": true,
@@ -184,7 +184,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1540,
+        1760,
         160
       ]
     },
@@ -215,7 +215,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1760,
+        1980,
         360
       ],
       "retryOnFail": true,
@@ -251,7 +251,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1760,
+        1980,
         60
       ]
     },
@@ -271,7 +271,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2420,
+        2640,
         140
       ],
       "onError": "continueRegularOutput",
@@ -305,7 +305,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1100,
+        1320,
         160
       ],
       "notes": "LLM_PROVIDER=anthropic → Claude; cualquier otro valor válido (ollama) → Ollama."
@@ -347,7 +347,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1320,
+        1540,
         40
       ],
       "retryOnFail": true,
@@ -409,7 +409,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1980,
+        2200,
         60
       ],
       "id": "b66d020e-62c8-420b-abdb-0def9bbceb17"
@@ -442,7 +442,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        2200,
+        2420,
         -40
       ],
       "id": "86cefd39-0942-41aa-8094-7f84423cd20f"
@@ -475,7 +475,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        2200,
+        2420,
         160
       ],
       "id": "78221332-034d-4f16-92ba-b91d5924ff12"
@@ -508,11 +508,45 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2420,
+        2640,
         -60
       ],
       "onError": "continueRegularOutput",
       "id": "27cd7cc3-d5ac-46af-8d50-53e33f75c020"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $env.META_API_VERSION || 'v21.0' }}/{{ $json.phoneNumberId || $env.PHONE_NUMBER_ID }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.META_ACCESS_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $json.messageId, typing_indicator: { type: 'text' } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "name": "Indicador escribiendo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        160
+      ],
+      "onError": "continueRegularOutput",
+      "id": "07306d37-c562-4727-8a0c-532d940dead4"
     }
   ],
   "connections": {
@@ -661,7 +695,7 @@
       "main": [
         [
           {
-            "node": "Preparar solicitud LLM",
+            "node": "Indicador escribiendo",
             "type": "main",
             "index": 0
           }
@@ -713,6 +747,17 @@
           }
         ],
         []
+      ]
+    },
+    "Indicador escribiendo": {
+      "main": [
+        [
+          {
+            "node": "Preparar solicitud LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

@@ -4,6 +4,8 @@
 //
 //   echo {"node":"Puerta de consentimiento","input":{...},"env":{},"store":{},"refs":{}} | node pruebas/nodos_n8n.js
 //   → {"output":[...],"store":{...}}
+//   echo {"param":["Indicador escribiendo","jsonBody"],"json":{...},"env":{...}} | node pruebas/nodos_n8n.js
+//   → {"value": <resultado de la expresión>}
 
 'use strict';
 const assert = require('assert');
@@ -33,12 +35,27 @@ function runCode(nodeName, { input, env = {}, store = {}, refs = {} }) {
   );
 }
 
-module.exports = { wf, nodes, runCode, ROOT, PROMPT_PATH };
+// Evalúa un parámetro con expresiones de n8n ("={{ ... }}" o texto con varias {{ ... }}).
+function evalParam(value, { $json = {}, $env = {} } = {}) {
+  assert.ok(typeof value === 'string' && value.startsWith('='), `no es una expresión: ${value}`);
+  const run = (expr) => new Function('$json', '$env', `return (${expr});`)($json, $env);
+  const tpl = value.slice(1);
+  const whole = tpl.match(/^\{\{([\s\S]*)\}\}$/);
+  if (whole && !whole[1].includes('}}')) return run(whole[1]);
+  return tpl.replace(/\{\{([\s\S]*?)\}\}/g, (_, expr) => String(run(expr)));
+}
+
+module.exports = { wf, nodes, runCode, evalParam, ROOT, PROMPT_PATH };
 
 if (require.main === module) {
   const req = JSON.parse(fs.readFileSync(0, 'utf8'));
   const store = req.store || {};
   try {
+    if (req.param) {
+      const [name, key] = req.param;
+      process.stdout.write(JSON.stringify({ value: evalParam(nodes[name].parameters[key], { $json: req.json, $env: req.env || {} }) }));
+      return;
+    }
     const output = runCode(req.node, { input: req.input, env: req.env, store, refs: req.refs });
     process.stdout.write(JSON.stringify({ output, store }));
   } catch (e) {
