@@ -28,12 +28,12 @@ ngrok (dominio estático HTTPS) ──► n8n en Docker (localhost:5678, contene
 - Todo el bot vive en `whatsapp-bot/`:
   - `system_prompt.md`: reglas de Valeria + base de conocimiento. Montado en el contenedor como `/data/system_prompt.md` (solo lectura); los cambios aplican en el siguiente mensaje sin reiniciar.
   - `n8n_workflow_template.json`: flujo importable en n8n.
-  - `docker-compose.yml`: n8n local (volumen `n8n_data`, `extra_hosts host.docker.internal:host-gateway`).
+  - `docker-compose.yml`: n8n local (volumen `n8n_data`, `extra_hosts host.docker.internal:host-gateway`) y, desde la Fase 1, el CRM: `postgres` (`jys-postgres`, sin puertos publicados, volumen `jys_pg_data`), `crm-api` (`jys-crm`, solo `127.0.0.1:8000`) y `crm-tools` (perfil `tools`: migraciones, scripts y pruebas). Red interna `jys` (n8n también está en ella para la Fase 3).
   - `.env.example`, `README.md`, `INSTRUCCIONES_PRUEBAS.md`, `.gitignore`.
   - `herramientas/ver_citas.py`: descifra y muestra `datos/citas.jsonl.enc` (requiere `python -m pip install cryptography`).
   - `datos/` (excluida de git, montada en el contenedor como `/data/datos`): registro cifrado de citas que escribe n8n.
   - `pruebas/`: `evaluar_modelos.py` (batería conversacional contra Ollama), `test_evaluar_modelos.py` y `test_flujo_n8n.py` (unittest; el segundo ejecuta los nodos con Node), `nodos_n8n.js` (arnés que ejecuta los nodos Code fuera de n8n) y `test_flujo.js` (pruebas del flujo sin n8n). Los informes van a `pruebas/resultados/` (excluido de git).
-- `../crm/ARQUITECTURA.md`: diseño del CRM/ERP y plan por fases (0 a 5).
+- `../crm/ARQUITECTURA.md`: diseño del CRM/ERP y plan por fases (0 a 5). `../crm/README.md`: cómo levantar, migrar, crear el admin, importar citas y probar el CRM (FastAPI + SQLAlchemy 2 + Alembic, Python 3.12).
 - `build.sh` (raíz): build de Cloudflare Pages que copia solo el sitio a `dist/` y excluye `whatsapp-bot/` y `crm/`.
 
 ## 4. Flujo n8n (`n8n_workflow_template.json`)
@@ -113,11 +113,21 @@ Estado (24/10/2026): n8n estable en Docker (`js-consultores-n8n`); `N8N_ENCRYPTI
 - **v3.1 (corrección):** nodo *Estado de la cita*: n8n lleva la solicitud (paso y datos por número) y la guarda sin depender de `<cita>`, que queda como respaldo; *Guardar cita cifrada* corre en todas las respuestas y nunca se dice "registrada" si no se guardó.
 - Pruebas: `node pruebas/test_flujo.js` (58) y `python -m unittest discover -s pruebas` (35), en verde.
 
+**Fase 1 – Infraestructura y BD del CRM (24/10/2026, en el repo; falta levantarla en la PC):**
+- `crm/` con FastAPI + SQLAlchemy 2 + Alembic; migración `0001` con `roles`, `users`, `contacts`, `consents`, `leads`, `appointments`, `audit_log` e `imported_citas`. `GET /health` comprueba la BD.
+- Dos roles de BD: `POSTGRES_USER` (`jys_owner`, dueño; solo `crm-tools`) y `jys_app` (la aplicación; lo crea `crm/docker/postgres-init/01-app-role.sh`). **Cambio respecto de ARQUITECTURA.md §8:** allí `POSTGRES_USER=jys_app` era también el usuario de la app, pero en la imagen oficial ese usuario es superusuario y podría saltarse los permisos de `audit_log`. `DATABASE_URL` no hace falta en Docker (compose arma la conexión con `POSTGRES_APP_PASSWORD`).
+- `audit_log` solo inserción: trigger que rechaza UPDATE/DELETE/TRUNCATE (también al dueño) + `jys_app` solo con SELECT/INSERT. `consents`: la app solo inserta; `ON DELETE RESTRICT`.
+- Cifrado AES-256-GCM de nombre, teléfono, correo, perfil de WhatsApp, resumen, notas y TOTP, con versión de clave en cada valor y `key_version` por fila (`CRM_DATA_KEY_V<n>`, `CRM_ACTIVE_KEY_VERSION`); `phone_hash` HMAC-SHA256 (`CRM_HMAC_KEY`). argon2id para contraseñas.
+- `scripts/create_admin.py` (getpass) y `scripts/importar_citas.py` (lee `datos/citas.jsonl.enc` con `CITAS_FILE_KEY`; idempotente con `imported_citas`; une versiones de la misma solicitud en 24 h; solo con consentimiento otorgado).
+- `crm-api` recibe solo las variables que necesita (no el `.env` completo); el flujo de n8n **no cambió**.
+- Pruebas: `docker compose run --rm crm-tools pytest` (29, en verde contra PostgreSQL 16.14; usan la BD `jys_test`).
+- Quedó fuera de la Fase 1 (es de fases siguientes): panel y sesiones (`CRM_SECRET_KEY`), `/api/bot/*` (`CRM_BOT_API_KEY`), `interactions`, `re_projects`, `settings`, `backup.ps1`, `purge_expired.py`, re-cifrado masivo.
+
 Pendientes (en este orden):
 1. **Importar el v3.1 y probarlo por WhatsApp:** importar `n8n_workflow_template.json`, desactivar el v3 y publicar el v3.1; `/reiniciar` y una cita completa → `ver_citas.py` debe mostrarla (columna/origen `flujo`); probar también una pregunta en medio de la solicitud, "Sin correo" y "cancelar".
 2. **Comparar modelos:** `ollama pull qwen2.5:7b` (y opcionalmente `llama3.1:8b`), `python pruebas/evaluar_modelos.py --modelos llama3:latest qwen2.5:7b --repeticiones 1`, fijar el mejor en `OLLAMA_MODEL`.
-3. **Fase 1** – Infraestructura y BD del CRM (`postgres` + `crm-api`), según `../crm/ARQUITECTURA.md`.
-4. **Fase 2** – Panel CRM. **Fase 3** – Integración Valeria ↔ CRM: pasar el consentimiento (`consents`) y las citas del static data / `datos/citas.jsonl.enc` a la API del CRM (importar las citas ya guardadas), extracción de cita con segunda llamada al LLM. Esto reemplaza la idea anterior de guardar las citas en Google Sheets.
+3. **Levantar la Fase 1 en la PC** (ver `../crm/README.md`): agregar las variables del CRM al `.env` con el bloque de PowerShell del README, `docker compose up -d --build`, `docker compose run --rm crm-tools alembic upgrade head`, `... pytest`, `... python -m scripts.create_admin`, `... python -m scripts.importar_citas`, `curl.exe -s http://127.0.0.1:8000/health`. Comprobar que n8n sigue respondiendo y guardar una copia del `.env` en un gestor de contraseñas.
+4. **Fase 2** – Panel CRM. **Fase 3** – Integración Valeria ↔ CRM: pasar el consentimiento (`consents`) y las citas del static data / `datos/citas.jsonl.enc` a la API del CRM (las ya guardadas se importan con `importar_citas.py`), extracción de cita con segunda llamada al LLM. Esto reemplaza la idea anterior de guardar las citas en Google Sheets.
 5. Token permanente de Meta (usuario del sistema); hoy es temporal (24 h). La documentación de Meta indica que el indicador de escritura requiere token de sistema o de empresa.
 6. **Agrupar mensajes seguidos (debounce) → Fase 3 con PostgreSQL.** No se implementó en n8n porque no es confiable: el static data se carga al iniciar cada ejecución y se guarda completo al terminar, sin bloqueo; ejecuciones simultáneas no comparten cambios y la última sobrescribe. Requiere una cola por número en PostgreSQL (bloqueo de fila). El mismo problema puede hacer que una respuesta lenta del LLM sobrescriba un cambio de consentimiento o del avance de la cita (`citaFlow`) hecho mientras tanto: también se resuelve al mover `consents` y `citaFlow` a PostgreSQL.
 7. Aviso al estudio fuera de la ventana de 24 h: plantilla aprobada por Meta para `FIRM_NOTIFY_WHATSAPP`.
