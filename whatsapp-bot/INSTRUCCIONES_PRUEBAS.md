@@ -47,6 +47,25 @@ En **Meta for Developers → su app → WhatsApp → Configuración → Webhook 
 
 Envíe un WhatsApp al número de prueba desde un número registrado como destinatario y revise el resultado en n8n → *Executions*.
 
+## Comparar modelos de Ollama (Fase 0)
+
+La batería conversacional (`pruebas/evaluar_modelos.py`) envía a Ollama los mismos mensajes que n8n, con datos ficticios, y revisa automáticamente tuteo, asesoría legal, consentimiento antes de pedir datos y el bloque `<cita>`. No usa n8n, ngrok ni WhatsApp. Requiere Python 3.9 o superior (solo la biblioteca estándar).
+
+```powershell
+ollama pull qwen2.5:7b
+ollama pull llama3.1:8b
+python pruebas/evaluar_modelos.py --modelos llama3:latest qwen2.5:7b llama3.1:8b
+```
+- Muestra una tabla con los casos superados por modelo y guarda todas las respuestas en `pruebas/resultados/` (excluida de git).
+- Para repetir solo algunos casos: `--casos 4 5 6`. Para más repeticiones: `--repeticiones 3`.
+- Las revisiones automáticas son aproximadas: lea las respuestas del informe antes de elegir. Luego ponga el elegido en `OLLAMA_MODEL` y ejecute `docker compose up -d --force-recreate`.
+
+Pruebas del código (no necesitan Ollama):
+```powershell
+python -m unittest discover -s pruebas -v
+docker run --rm -v "${PWD}:/w" -w /w node:20-alpine node pruebas/test_flujo.js
+```
+
 ## Verificar el estado de Docker
 
 ```bash

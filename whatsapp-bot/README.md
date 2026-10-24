@@ -8,7 +8,7 @@ Asistente conversacional para la atención inicial de **JS CONSULTORES Y ABOGADO
 ┌──────────────┐   webhook (POST)   ┌──────────────────────────────┐   HTTP     ┌───────────────────┐
 │   Usuario    │ ─────────────────▶ │             n8n              │ ─────────▶ │  Ollama (local)   │
 │  (WhatsApp)  │                    │                              │            │  /api/chat        │
-│              │ ◀───────────────── │  extraer → historial →       │ ◀───────── │  llama3           │
+│              │ ◀───────────────── │  extraer → historial →       │ ◀───────── │  o Claude (API)   │
 └──────────────┘  Graph API /messages│  llamar al LLM → responder   │            └───────────────────┘
        ▲                            └──────────────┬───────────────┘
        │                                           │ solicitud de cita (<cita> JSON)
@@ -19,19 +19,17 @@ Asistente conversacional para la atención inicial de **JS CONSULTORES Y ABOGADO
 | Componente | Rol |
 |---|---|
 | **WhatsApp Cloud API** (Meta) | Entrega cada mensaje entrante a n8n por webhook y envía las respuestas mediante `POST /{phone-number-id}/messages`. |
-| **n8n** | Orquestador: valida el webhook, extrae el mensaje, mantiene el historial por número, llama al modelo local, envía la respuesta y notifica las solicitudes de cita. |
-| **Ollama** con **Llama 3** (en el mismo equipo, sin API key) | Genera la respuesta siguiendo `system_prompt.md`: tono formal, filtrado del caso, agendamiento y el límite de no dar asesoría legal. |
+| **n8n** | Orquestador: valida el webhook, extrae el mensaje, mantiene el historial por número, llama al LLM (Ollama o Claude, según `LLM_PROVIDER`), envía la respuesta y notifica las solicitudes de cita. |
+| **Ollama** (local, sin API key) o **Claude** (`LLM_PROVIDER=anthropic`) | Genera la respuesta siguiendo `system_prompt.md`: tono formal, filtrado del caso, agendamiento y el límite de no dar asesoría legal. |
 
 ### Sobre el modelo
 
-El modelo corre localmente con **Ollama** (`ollama pull llama3`); no se envían conversaciones a servicios externos de IA ni hace falta API key. n8n llama a `POST {OLLAMA_URL}/api/chat` (por defecto `http://host.docker.internal:11434`) con:
+El proveedor se elige con **`LLM_PROVIDER`** en el `.env`; el nodo **¿Usar Claude?** envía la petición a la rama correspondiente y **Procesar respuesta** entiende ambos formatos.
 
-- `stream: false` y el system prompt como primer mensaje `system`, seguido del historial.
-- `options.num_ctx: 8192`: el system prompt ocupa ~3.000 tokens y el contexto por defecto de Ollama lo truncaría. 8192 es el máximo de Llama 3; con historiales largos, baje `CONVERSATION_MAX_MESSAGES`.
-- `temperature: 0.3` para respuestas más consistentes con las reglas, y `keep_alive: 30m` para no recargar el modelo en cada mensaje.
-- Un recordatorio breve de las reglas clave (español, "Usted", sin asesoría legal, `<cita>` en JSON de una línea) al final del system prompt, porque los modelos pequeños tienden a olvidarlas en conversaciones largas. El flujo también acepta el bloque `<cita>` envuelto en bloques de código.
+- **`ollama`** (por defecto): modelo local (`OLLAMA_MODEL`), sin enviar conversaciones a servicios externos. n8n llama a `POST {OLLAMA_URL}/api/chat` con `stream: false`, el system prompt como primer mensaje `system`, `num_ctx: 8192` (el system prompt ocupa ~4.400 tokens; no lo baje), `temperature: 0.3` y `keep_alive: 30m`.
+- **`anthropic`**: Claude por `POST https://api.anthropic.com/v1/messages` con `ANTHROPIC_API_KEY`, modelo `claude-sonnet-5-5`, `thinking: {type: "adaptive"}`, `output_config.effort` (`ANTHROPIC_EFFORT`, por defecto `low`), `fallbacks: "default"` (beta `server-side-fallback-2026-07-01`) y el system prompt con caché. Envía a WhatsApp solo los bloques de texto y responde con cortesía si la API rechaza la solicitud (`stop_reason: "refusal"`).
 
-**Limitación importante:** Llama 3 (8B) sigue instrucciones largas con menos fiabilidad que un modelo grande. Puede romper la prohibición de asesoría legal, dejar de tratar de "Usted" o emitir el bloque `<cita>` mal formado (el flujo descarta etiquetas incompletas para que el usuario no las vea). Pruebe la conversación a fondo antes de usarlo con clientes reales; si falla, use un modelo mayor en `OLLAMA_MODEL` (por ejemplo `llama3:70b`, si su equipo lo soporta).
+**Elegir el modelo local:** los modelos pequeños cumplen las reglas largas con menos fiabilidad (en las pruebas del 17/10/2026, `llama3` tuteó, pidió datos sin consentimiento y no emitió `<cita>`). Compare candidatos con la batería automática antes de cambiar `OLLAMA_MODEL` (ver `INSTRUCCIONES_PRUEBAS.md` → *Comparar modelos*). Las reglas críticas se refuerzan en `system_prompt.md` (sección *Trato de "Usted"* con ejemplos, mensaje fijo de consentimiento, ejemplo literal del bloque `<cita>` y *Recordatorio final*), pero la garantía real del consentimiento y del registro de citas llegará en la Fase 3 (`crm/ARQUITECTURA.md`), con código determinista en n8n.
 
 ## Flujo del workflow (`n8n_workflow_template.json`)
 
@@ -43,8 +41,8 @@ El modelo corre localmente con **Ollama** (`ollama pull llama3`); no se envían 
 1. **Webhook**: responde `200` de inmediato (Meta reintenta si tarda).
 2. **Extraer mensaje**: ignora eventos de estado (`sent`, `delivered`, `read`), descarta duplicados por `message.id` y normaliza texto, botones y listas. Audios, imágenes y documentos se pasan como aviso para que el asistente pida la consulta por texto.
 3. **Preparar solicitud LLM**: lee `system_prompt.md`, recupera el historial del número (máx. `CONVERSATION_MAX_MESSAGES`, se reinicia tras `CONVERSATION_TTL_HOURS`) y arma el cuerpo de la petición.
-4. **Ollama (chat local)**: `POST {OLLAMA_URL}/api/chat` (por defecto `http://host.docker.internal:11434`), con tiempo de espera de 5 minutos y un reintento.
-5. **Procesar respuesta**: si Ollama falla responde con un mensaje de cortesía, retira el bloque `<cita>{…}</cita>`, recorta a los límites de WhatsApp y guarda el turno en memoria.
+4. **¿Usar Claude?** → **Claude (Messages API)** si `LLM_PROVIDER=anthropic` (tiempo de espera 2 min, 3 intentos), o **Ollama (chat local)** en otro caso (`POST {OLLAMA_URL}/api/chat`, 5 min, 2 intentos).
+5. **Procesar respuesta**: si el LLM falla o rechaza la solicitud responde con un mensaje de cortesía, retira todos los bloques `<cita>{…}</cita>` (usa el último válido) y las etiquetas sueltas, recorta a los límites de WhatsApp y guarda el turno en memoria.
 6. **Enviar respuesta WhatsApp** y, si hubo bloque `<cita>`, **Notificar al estudio** con el JSON de la solicitud.
 
 ### Flujo conversacional (definido en `system_prompt.md`)
@@ -62,6 +60,11 @@ Saludo → filtrado del caso (área, resumen, urgencia, persona natural/empresa)
 ├── INSTRUCCIONES_PRUEBAS.md     # Docker + Ollama + ngrok + webhook de Meta (resumen)
 ├── GUIA_META_NGROK.md           # Paso a paso detallado de Meta y ngrok
 ├── ESTADO_PROYECTO.md           # Estado actual y próximos pasos
+├── CLAUDE.md                    # Contexto y reglas para Claude Code
+├── pruebas/
+│   ├── evaluar_modelos.py       # Batería conversacional contra Ollama (comparar modelos)
+│   ├── test_evaluar_modelos.py  # Pruebas del evaluador y del system prompt
+│   └── test_flujo.js            # Pruebas de los nodos Code del flujo (sin n8n)
 ├── .env.example                 # Variables de entorno
 └── .gitignore
 ```
@@ -103,7 +106,7 @@ Para enviar las citas a otro destino, reemplace el nodo **Notificar al estudio (
 - **Memoria**: la plantilla guarda el historial en *static data* de n8n, que solo persiste en ejecuciones de producción y no escala a varios workers. Para volumen real, use Redis o Postgres.
 - **Mensajes simultáneos**: si un usuario envía varios mensajes seguidos, pueden procesarse en paralelo. Considere un *debounce* (agrupar mensajes durante unos segundos) o una cola por número.
 - **Ventana de 24 h**: WhatsApp solo permite mensajes libres dentro de las 24 h posteriores al último mensaje del usuario. Para confirmaciones posteriores, use plantillas aprobadas por Meta.
-- **Datos personales**: las conversaciones contienen datos sensibles. Limite la retención (`saveDataSuccessExecution: none` ya está configurado), restrinja el acceso a n8n y cumpla la Ley N.° 29733 y su reglamento.
+- **Datos personales**: las conversaciones contienen datos sensibles. Limite la retención (el flujo ya trae `saveDataSuccessExecution: none` y `saveManualExecutions: false`; si los cambia para depurar, restáurelos; las ejecuciones con error sí se guardan y pueden contener el mensaje), restrinja el acceso a n8n y cumpla la Ley N.° 29733 y su reglamento.
 - **Secretos**: mantenga `.env` fuera del repositorio (incluido en `.gitignore`).
 
 ## Aviso
