@@ -99,6 +99,9 @@ services:
 
   # Herramientas del CRM: no queda corriendo (perfil "tools"). Es el único servicio con la clave del dueño
   # de la BD (para migraciones y pruebas) y con CITAS_FILE_KEY + ./datos (solo lectura) para importar citas.
+  # Corre con el uid/gid del usuario "node" de la imagen de n8n (1000:1000): n8n crea citas.jsonl.enc con
+  # permisos 600, así que solo su dueño puede leerlo. Así no hace falta abrir permisos (644/666) ni un grupo
+  # compartido (con 600 el grupo no tiene acceso). crm-api sigue con su propio usuario (uid 10001).
   #   docker compose run --rm crm-tools alembic upgrade head
   #   docker compose run --rm crm-tools python -m scripts.create_admin
   #   docker compose run --rm crm-tools python -m scripts.importar_citas
@@ -107,6 +110,7 @@ services:
     image: jys-crm:latest
     build: ../crm
     profiles: [tools]
+    user: "1000:1000"
     environment:
       <<: *crm-env
       CRM_DB_ADMIN_USER: ${POSTGRES_USER:-jys_owner}

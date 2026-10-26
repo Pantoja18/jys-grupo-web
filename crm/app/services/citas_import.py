@@ -101,8 +101,17 @@ def read_lines(path: Path, key: bytes) -> tuple[list[tuple[str, dict]], int]:
     """Devuelve [(hash de la línea, registro)] ordenado por fecha de registro, y cuántas no se pudieron leer."""
     if not path.exists():
         raise CitasFileError(f"No existe el archivo {path}.")
+    try:
+        content = path.read_text(encoding="ascii", errors="replace")
+    except PermissionError:
+        # n8n crea el archivo con permisos 600 (dueño: usuario "node", uid 1000). crm-tools debe correr con ese uid.
+        raise CitasFileError(
+            f"Sin permiso para leer {path}: el archivo es del usuario de n8n (uid 1000, permisos 600). "
+            "Use el servicio crm-tools de docker-compose.yml, que corre con ese uid (ver crm/README.md).") from None
+    except OSError as e:
+        raise CitasFileError(f"No se pudo leer {path} ({type(e).__name__}).") from None
     records, bad = [], 0
-    for line in path.read_text(encoding="ascii", errors="replace").splitlines():
+    for line in content.splitlines():
         line = line.strip()
         if not line:
             continue

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.models import Appointment, AuditLog, Consent, Contact, ImportedCita, Lead, User
 from app.security.crypto import get_keyring
 from app.security.passwords import verify_password
-from app.services.citas_import import CitasFileError, import_citas, parse_citas_key
+from app.services.citas_import import CitasFileError, import_citas, parse_citas_key, read_lines
 
 CITAS_KEY_HEX = secrets.token_hex(32)
 CITAS_KEY = bytes.fromhex(CITAS_KEY_HEX)
@@ -135,6 +135,27 @@ def test_script_importar_citas(app_env, tmp_path, monkeypatch, capsys):
     assert "Ana" not in out and "900000000" not in out
     monkeypatch.setenv("CITAS_FILE_KEY", "corta")
     assert importar_citas.main(["--archivo", str(f)]) == 2
+
+
+def test_archivo_sin_permiso_de_lectura(app_env, tmp_path, monkeypatch, capsys):
+    """Si crm-tools no corre con el uid de n8n, el archivo (600) no se puede leer: error claro, sin traceback."""
+    from scripts import importar_citas
+
+    f = write(tmp_path / "citas.jsonl.enc", n8n_line(record()))
+    real_read_text = Path.read_text
+
+    def denied(self, *args, **kwargs):
+        if self == f:
+            raise PermissionError(13, "Permission denied", str(self))
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    with pytest.raises(CitasFileError, match="uid 1000"):
+        read_lines(f, CITAS_KEY)
+    monkeypatch.setenv("CITAS_FILE_KEY", CITAS_KEY_HEX)
+    assert importar_citas.main(["--archivo", str(f)]) == 2
+    err = capsys.readouterr().err
+    assert "Sin permiso" in err and "crm-tools" in err and "Traceback" not in err
 
 
 @pytest.mark.skipif(not shutil.which("node"), reason="Node.js no está instalado")

@@ -32,7 +32,7 @@ ngrok (dominio estático HTTPS) ──► n8n en Docker (localhost:5678, contene
   - `.env.example`, `README.md`, `INSTRUCCIONES_PRUEBAS.md`, `.gitignore`.
   - `herramientas/ver_citas.py`: descifra y muestra `datos/citas.jsonl.enc` (requiere `python -m pip install cryptography`).
   - `datos/` (excluida de git, montada en el contenedor como `/data/datos`): registro cifrado de citas que escribe n8n.
-  - `pruebas/`: `evaluar_modelos.py` (batería conversacional contra Ollama), `test_evaluar_modelos.py` y `test_flujo_n8n.py` (unittest; el segundo ejecuta los nodos con Node), `nodos_n8n.js` (arnés que ejecuta los nodos Code fuera de n8n) y `test_flujo.js` (pruebas del flujo sin n8n). Los informes van a `pruebas/resultados/` (excluido de git).
+  - `pruebas/`: `evaluar_modelos.py` (batería conversacional contra Ollama), `test_evaluar_modelos.py`, `test_compose.py` (uid de `crm-tools` y montaje de `datos/`) y `test_flujo_n8n.py` (unittest; el último ejecuta los nodos con Node), `nodos_n8n.js` (arnés que ejecuta los nodos Code fuera de n8n) y `test_flujo.js` (pruebas del flujo sin n8n). Los informes van a `pruebas/resultados/` (excluido de git).
 - `../crm/ARQUITECTURA.md`: diseño del CRM/ERP y plan por fases (0 a 5). `../crm/README.md`: cómo levantar, migrar, crear el admin, importar citas y probar el CRM (FastAPI + SQLAlchemy 2 + Alembic, Python 3.12).
 - `build.sh` (raíz): build de Cloudflare Pages que copia solo el sitio a `dist/` y excluye `whatsapp-bot/` y `crm/`.
 
@@ -120,7 +120,8 @@ Estado (24/10/2026): n8n estable en Docker (`js-consultores-n8n`); `N8N_ENCRYPTI
 - Cifrado AES-256-GCM de nombre, teléfono, correo, perfil de WhatsApp, resumen, notas y TOTP, con versión de clave en cada valor y `key_version` por fila (`CRM_DATA_KEY_V<n>`, `CRM_ACTIVE_KEY_VERSION`); `phone_hash` HMAC-SHA256 (`CRM_HMAC_KEY`). argon2id para contraseñas.
 - `scripts/create_admin.py` (getpass) y `scripts/importar_citas.py` (lee `datos/citas.jsonl.enc` con `CITAS_FILE_KEY`; idempotente con `imported_citas`; une versiones de la misma solicitud en 24 h; solo con consentimiento otorgado).
 - `crm-api` recibe solo las variables que necesita (no el `.env` completo); el flujo de n8n **no cambió**.
-- Pruebas: `docker compose run --rm crm-tools pytest` (29, en verde contra PostgreSQL 16.14; usan la BD `jys_test`).
+- `crm-tools` corre con `user: "1000:1000"` (el uid/gid de `node` en la imagen de n8n): n8n crea `citas.jsonl.enc` con permisos 600 y con otro uid `importar_citas` fallaba con `PermissionError` (26/10/2026). No abrir permisos del archivo (644/666); `crm-api` sigue con uid 10001. Lo verifica `pruebas/test_compose.py`.
+- Pruebas: `docker compose run --rm crm-tools pytest` (30, en verde contra PostgreSQL 16.14; usan la BD `jys_test`).
 - Quedó fuera de la Fase 1 (es de fases siguientes): panel y sesiones (`CRM_SECRET_KEY`), `/api/bot/*` (`CRM_BOT_API_KEY`), `interactions`, `re_projects`, `settings`, `backup.ps1`, `purge_expired.py`, re-cifrado masivo.
 
 Pendientes (en este orden):

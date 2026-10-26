@@ -10,7 +10,7 @@ API interna y base de datos del sistema de gestión del estudio. Diseño complet
 |---|---|
 | `postgres` | PostgreSQL 16 (`jys-postgres`), volumen `jys_pg_data`, **sin puertos publicados**: solo lo alcanzan `crm-api` y `crm-tools` por la red interna `jys`. |
 | `crm-api` | FastAPI (`jys-crm`), publicado **solo en `127.0.0.1:8000`** (no lo ven otros equipos ni pasa por ngrok). Por ahora expone `GET /health`. |
-| `crm-tools` | Misma imagen, perfil `tools` (no queda corriendo): migraciones, `create_admin`, `importar_citas` y pruebas. Es el único servicio con la clave del dueño de la BD y con `CITAS_FILE_KEY`. |
+| `crm-tools` | Misma imagen, perfil `tools` (no queda corriendo): migraciones, `create_admin`, `importar_citas` y pruebas. Es el único servicio con la clave del dueño de la BD y con `CITAS_FILE_KEY`. Corre con el uid/gid de n8n (`1000:1000`) para poder leer `datos/citas.jsonl.enc` (ver §4). |
 | Modelo de datos | `roles`, `users`, `contacts`, `consents`, `leads`, `appointments`, `audit_log`, `imported_citas` (migración `migrations/versions/0001_*`). |
 
 Estructura:
@@ -125,6 +125,8 @@ docker compose run --rm crm-tools python -m scripts.importar_citas
 - **Varias versiones de una misma solicitud:** si son del mismo número y están dentro de 24 h, se unen en una sola cita.
 - **Sin consentimiento otorgado:** no se importan.
 - **Qué muestra:** solo conteos (`nuevas`, `actualizadas`, `repetidas`, `sin consentimiento`, `invalidas`).
+- **Permisos del archivo:** n8n crea `citas.jsonl.enc` con permisos `600` como su usuario `node` (uid 1000), así que solo ese uid puede leerlo; un grupo compartido no sirve, porque con `600` el grupo no tiene acceso. Por eso `crm-tools` corre con `user: "1000:1000"` en `docker-compose.yml` y monta `./datos` en solo lectura. **No abra los permisos del archivo** (`644`/`666`) ni hace falta `--user` en el comando. `crm-api` sigue con su propio usuario (uid 10001) y no monta `./datos`.
+  - Si aparece `Sin permiso para leer /data/datos/citas.jsonl.enc`, `crm-tools` no está corriendo con ese uid: revise que `docker-compose.yml` tenga `user: "1000:1000"` en `crm-tools`. Con `docker compose run --rm crm-tools id -u` debe ver `1000`.
 
 ## 5. Pruebas
 
