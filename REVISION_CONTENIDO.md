@@ -31,7 +31,7 @@ Para aprobar: marcar cada casilla `[x]` o anotar la corrección al lado. Los tex
 - [ ] Paso 4 (Seguimiento) — "Te mantenemos informado sobre el avance, te explicamos cada etapa y resolvemos tus consultas mientras dure el trámite." (confirmar que el estudio puede comprometerse a este seguimiento).
 - [ ] Nota bajo los documentos: "Lista referencial: los documentos pueden variar según cada caso."
 - [ ] Recuadro final: "¿Quieres que revisemos tu caso?" / "Escríbenos por WhatsApp y agenda una consulta con el Área jurídica."
-- [ ] Botón de WhatsApp: usa el mismo número jurídico de la web (956 771 681) con el mensaje "Hola, quiero agendar una consulta sobre <servicio>."
+- [ ] Botón de WhatsApp: usa el número de la empresa (956 764 364, enlace https://wa.me/51956764364) con el mensaje "Hola, quiero agendar una consulta sobre <servicio>."
 - [ ] Títulos SEO: incluyen "en Supe y Barranca" (zona de la oficina). Confirmar que se desea esa mención geográfica.
 - [ ] Etiqueta superior de cada página ("Área jurídica · Familia / Inmuebles / Herencias / Documentos / Registros civiles / Otros servicios"): confirmar la clasificación.
 - [ ] Instituciones mencionadas de forma general: SUNARP / Registros Públicos, notaría, juzgado, municipalidad, registro civil. Confirmar que las menciones son correctas para cada trámite.
@@ -157,6 +157,16 @@ Además de lo indicado abajo, revisar en cada página los textos completos de: �
 - [ ] IMPORTANTE: confirmar qué incluye exactamente este servicio (¿copias certificadas, inscripción, rectificación, asesoría para matrimonio civil?). El texto actual es general.
 - [ ] Frase: "También orientamos a quienes van a casarse sobre los documentos y pasos generales del matrimonio civil." (confirmar si se ofrece).
 - [ ] FAQ "¿Dónde se obtiene una copia del acta de matrimonio?".
+
+## Número de contacto (cambio de noviembre de 2026)
+
+El único número de contacto del Área jurídica es ahora el de la empresa: **+51 956 764 364** (WhatsApp y teléfono). Ya no aparece el número personal de la Dra. Sandoval (956 771 681) ni el teléfono 993 793 224.
+
+- [ ] Botones de WhatsApp de las 12 páginas de servicios y burbuja flotante de todas las páginas → `https://wa.me/51956764364` (se mantiene el mensaje prellenado de cada servicio).
+- [ ] Footer de todas las páginas: "Jurídico: WhatsApp y teléfono 956 764 364 · Ejuridicojys@gmail.com" (el número enlaza a `tel:+51956764364`). Se quitó "Tel 993 793 224".
+- [ ] Formulario "Contáctanos" del inicio: ahora envía los mensajes a 51956764364.
+- [ ] **terminos.html, sección Política de privacidad (canal para derechos ARCO)**: la frase pasa a decir "Puedes ejercerlos escribiendo a Ejuridicojys@gmail.com o al WhatsApp 956 764 364, indicando tu solicitud." Es la política que usa el bot de WhatsApp (Ley 29733); la Dra. debe aprobar este cambio de canal. No se cambió el ancla `#privacidad` ni el resto de la sección.
+- La línea "Inmobiliario: WhatsApp 995 149 635 / 956 764 364" y los botones de los proyectos de lotes (995 149 635) no se modificaron.
 
 ## Cambios en index.html
 
