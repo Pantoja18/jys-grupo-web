@@ -166,7 +166,7 @@ El único número de contacto del Área jurídica es ahora el de la empresa: **+
 - [ ] Footer de todas las páginas: "Jurídico: WhatsApp y teléfono 956 764 364 · Ejuridicojys@gmail.com" (el número enlaza a `tel:+51956764364`). Se quitó "Tel 993 793 224".
 - [ ] Formulario "Contáctanos" del inicio: ahora envía los mensajes a 51956764364.
 - [ ] **terminos.html, sección Política de privacidad (canal para derechos ARCO)**: la frase pasa a decir "Puedes ejercerlos escribiendo a Ejuridicojys@gmail.com o al WhatsApp 956 764 364, indicando tu solicitud." Es la política que usa el bot de WhatsApp (Ley 29733); la Dra. debe aprobar este cambio de canal. No se cambió el ancla `#privacidad` ni el resto de la sección.
-- La línea "Inmobiliario: WhatsApp 995 149 635 / 956 764 364" y los botones de los proyectos de lotes (995 149 635) no se modificaron.
+- [ ] Se quitó el número 995 149 635 de toda la web. El footer tiene una sola línea de contacto (ya no separa Jurídico e Inmobiliario) y los botones "Quiero información" de los proyectos de lotes ahora van a `https://wa.me/51956764364`, con su mensaje prellenado.
 
 ## Cambios en index.html
 
