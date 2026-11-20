@@ -177,3 +177,37 @@ El único número de contacto del Área jurídica es ahora el de la empresa: **+
 - El inicio muestra "8 Años de experiencia": no se usó en las páginas nuevas. Confirmar el dato si se desea reutilizar.
 - `index.html` no tiene meta description propia; se puede agregar en otro cambio.
 - No existe `libro-reclamaciones.html` en `main`; si debe existir, se crea en otra rama.
+
+---
+
+# Avisos legales: cookies, enlaces legales y Libro de Reclamaciones (rama `web/avisos-legales`)
+
+**Estado: PENDIENTE DE REVISIÓN Y APROBACIÓN por la Dra. Yudith Sandoval antes de unir a `main`.**
+
+## Auditoría de cookies (20/11/2026)
+- La web no fija cookies propias: el dominio no envía cabeceras `Set-Cookie`. No hay Google Analytics, Cloudflare Web Analytics, píxeles, Google Fonts ni `localStorage` (antes de este cambio).
+- Único recurso de terceros que se cargaba solo: el **mapa de Google Maps** (iframe en "Visítanos en nuestra oficina"). Google puede usar cookies y recibe la IP del visitante, así que se trata como no esencial.
+- Cloudflare agrega su script de protección de correo (`email-decode`), del propio dominio y sin cookies.
+
+## Banner de cookies (`consent.js`, en todas las páginas)
+- [ ] Texto del banner: "Usamos un mapa de Google que puede usar cookies de terceros. Solo se carga si lo aceptas. Más información en nuestra Política de privacidad." Botones "Rechazar" y "Aceptar", con el mismo diseño.
+- [ ] El mapa no se carga hasta que la persona pulsa "Aceptar". Mientras tanto, se muestra: "El mapa de Google se muestra solo si aceptas sus cookies de terceros." con el botón "Aceptar y ver el mapa".
+- [ ] La elección se guarda en el navegador (`localStorage`, clave `jys-cookies`) y se puede cambiar desde "Preferencias de cookies" en el pie de página.
+
+## Cambios en `terminos.html` (Política de privacidad)
+- [ ] Fecha: "Última actualización: noviembre de 2026".
+- [ ] Punto 2.2: se reemplazó "No usamos cookies ni herramientas de rastreo automático en este sitio." por: "Si presentas un reclamo o queja en el Libro de Reclamaciones, también recopilamos los datos que ese formulario solicita. Este sitio no usa cookies propias de seguimiento, analítica ni publicidad (ver 2.8 Cookies)."
+- [ ] Nuevo punto **2.8 Cookies** (`terminos.html#cookies`): explica que no hay cookies propias de seguimiento, que el mapa de Google solo se carga si se acepta, que la elección se guarda en el navegador y cómo cambiarla.
+- El ancla `#privacidad` no cambió.
+
+## Enlaces legales en el pie de página (16 páginas)
+- [ ] En todas las páginas: "Términos y condiciones" · "Política de privacidad" · "Libro de Reclamaciones" · "Preferencias de cookies".
+- [ ] **Ícono del Libro de Reclamaciones**: se usa un ícono genérico de libro junto al texto "Libro de Reclamaciones". Si se quiere usar la imagen oficial de Indecopi, hay que descargarla del sitio de Indecopi y agregarla.
+
+## Libro de Reclamaciones (`libro-reclamaciones.html`)
+Se trajo solo este archivo desde la rama `whatsapp-bot` (commit 8ffb209). Se agregó el WhatsApp y teléfono 956 764 364 en los datos del proveedor y en el pie de página, el aviso de cookies y la URL al `sitemap.xml`.
+- [ ] **Datos pendientes en la página:** "[RAZÓN SOCIAL – PENDIENTE]" y "[RUC – PENDIENTE]". Hay que completarlos antes de publicar.
+- [ ] **A dónde llegan los reclamos:** el formulario **no envía los datos a ningún servidor**. Genera la Hoja de Reclamación en el navegador y abre el programa de correo de la persona (`mailto:`) dirigido a Ejuridicojys@gmail.com, con copia a su propio correo. El reclamo solo llega si la persona envía ese correo. No queda registro automático ni correlativo. Definir si esto es suficiente o si se necesita un envío automático con constancia al consumidor.
+- [ ] El número de hoja se forma con la fecha y hora (por ejemplo, LR-20261120-153000). No es un correlativo.
+- [ ] Textos con referencias legales y plazos para revisar: "Ley N.º 29571", "Ley N.º 29733", "un plazo no mayor a quince (15) días hábiles improrrogables" y las definiciones de "Reclamo" y "Queja".
+- [ ] Los campos del formulario (incluido "Monto reclamado (S/)") y las casillas de aceptación.
