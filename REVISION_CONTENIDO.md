@@ -177,3 +177,36 @@ El único número de contacto del Área jurídica es ahora el de la empresa: **+
 - El inicio muestra "8 Años de experiencia": no se usó en las páginas nuevas. Confirmar el dato si se desea reutilizar.
 - `index.html` no tiene meta description propia; se puede agregar en otro cambio.
 - No existe `libro-reclamaciones.html` en `main`; si debe existir, se crea en otra rama.
+
+---
+
+# Avisos legales: cookies, enlaces legales y Libro de Reclamaciones (rama `web/avisos-legales`)
+
+**Estado: APROBADO. Aprobado por la Dra. Yudith Sandoval el 20/11/2026.** Los reclamos seguirán llegando por correo a Ejuridicojys@gmail.com por ahora.
+
+## Auditoría de cookies (20/11/2026)
+- La web no fija cookies propias: el dominio no envía cabeceras `Set-Cookie`. No hay Google Analytics, Cloudflare Web Analytics, píxeles, Google Fonts ni `localStorage`.
+- Único recurso de terceros que se cargaba solo: el **mapa de Google Maps** (iframe en "Visítanos en nuestra oficina"). Google puede usar cookies y recibe la IP del visitante.
+- Cloudflare agrega su script de protección de correo (`email-decode`), del propio dominio y sin cookies.
+
+## Mapa de Google y cookies (decisión del 20/11/2026: sin banner)
+- [x] El mapa de Google Maps de la portada se muestra **directamente** al abrir la página, sin pedir consentimiento (con `loading="lazy"` para que no frene la carga). Se mantienen los botones "Cómo llegar (Waze)" y "Google Maps".
+- No hay banner de cookies ni enlace de preferencias de cookies (se eliminó el archivo del banner).
+
+## Cambios en `terminos.html` (Política de privacidad)
+- [x] Fecha: "Última actualización: noviembre de 2026".
+- [x] Punto 2.2: se reemplazó "No usamos cookies ni herramientas de rastreo automático en este sitio." por: "Si presentas un reclamo o queja en el Libro de Reclamaciones, también recopilamos los datos que ese formulario solicita. Este sitio no usa cookies propias de seguimiento, analítica ni publicidad (ver 2.8 Cookies)."
+- [x] Nuevo punto **2.8 Cookies** (`terminos.html#cookies`): "Este sitio no usa cookies propias de seguimiento, analítica ni publicidad." y "La página de inicio incluye un mapa de Google Maps con la ubicación de nuestra oficina. Al cargarse, ese mapa puede recibir datos técnicos de tu navegador (como tu dirección IP) y usar cookies según la política de privacidad de Google [enlace a https://policies.google.com/privacy]. J&S no controla ni recibe esos datos."
+- El ancla `#privacidad` no cambió.
+
+## Enlaces legales en el pie de página (16 páginas)
+- [x] En todas las páginas: "Términos y condiciones" · "Política de privacidad" · "Libro de Reclamaciones".
+- [x] **Ícono del Libro de Reclamaciones**: se usa un ícono genérico de libro junto al texto "Libro de Reclamaciones". Si se quiere usar la imagen oficial de Indecopi, hay que descargarla del sitio de Indecopi y agregarla.
+
+## Libro de Reclamaciones (`libro-reclamaciones.html`)
+Se trajo solo este archivo desde la rama `whatsapp-bot` (commit 8ffb209). Se agregó el WhatsApp y teléfono 956 764 364 en los datos del proveedor y en el pie de página, y la URL al `sitemap.xml`.
+- [x] Razón social y RUC: por ahora **no se muestran** en la página (el proveedor figura como "J&S Estudio Jurídico y Grupo Inmobiliario"). Se agregarán en otro cambio cuando se tengan los datos.
+- [x] **A dónde llegan los reclamos:** el formulario **no envía los datos a ningún servidor**. Genera la Hoja de Reclamación en el navegador y abre el programa de correo de la persona (`mailto:`) dirigido a Ejuridicojys@gmail.com, con copia a su propio correo. El reclamo solo llega si la persona envía ese correo. No queda registro automático ni correlativo. Definir si esto es suficiente o si se necesita un envío automático con constancia al consumidor.
+- [x] El número de hoja se forma con la fecha y hora (por ejemplo, LR-20261120-153000). No es un correlativo.
+- [x] Textos con referencias legales y plazos para revisar: "Ley N.º 29571", "Ley N.º 29733", "un plazo no mayor a quince (15) días hábiles improrrogables" y las definiciones de "Reclamo" y "Queja".
+- [x] Los campos del formulario (incluido "Monto reclamado (S/)") y las casillas de aceptación.
