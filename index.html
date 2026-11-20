@@ -121,6 +121,12 @@
   .social a{border:1px solid rgba(201,162,39,0.4);padding:8px 16px;border-radius:20px;font-size:13px;color:var(--gold-light);}
   .wa-float{position:fixed;bottom:22px;right:22px;background:#25D366;color:#0a1220;width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 14px rgba(0,0,0,0.4);z-index:200;}
   .cta-btn{display:inline-block;background:var(--gold);color:#0a1220;font-weight:700;padding:12px 26px;border-radius:6px;font-size:14px;}
+  .card-link{display:flex;flex-direction:column;}
+  .card-link p{flex:1;}
+  .more{display:inline-block;margin-top:12px;font-size:12px;color:var(--gold);opacity:.8;transition:opacity .2s ease;}
+  .card-link:hover .more,.tag-link:hover .more{opacity:1;}
+  .tag-link .more{margin:0 0 0 4px;font-size:11px;}
+  .tag-link:hover{border-color:var(--gold);}
 </style>
 </head>
 <body>
@@ -164,20 +170,20 @@
   <h2>Área jurídica</h2>
   <p class="section-sub">Soluciones legales claras y efectivas para proteger tus derechos — Dra. Yudith Sandoval, abogada</p>
   <div class="grid">
-    <div class="card"><h3>Procesos de alimentos</h3><p>Demandas y trámites de pensión alimenticia.</p></div>
-    <div class="card"><h3>Rectificación de partida</h3><p>Corrección de datos en actas y partidas registrales.</p></div>
-    <div class="card"><h3>Tenencia</h3><p>Procesos de tenencia y custodia de menores.</p></div>
-    <div class="card"><h3>Sucesión intestada</h3><p>Trámite de herencias cuando no existe testamento.</p></div>
-    <div class="card"><h3>Prescripción adquisitiva</h3><p>Formalización de la propiedad por posesión.</p></div>
-    <div class="card"><h3>Saneamiento de predios</h3><p>Regularización legal de terrenos y propiedades.</p></div>
-    <div class="card"><h3>Daños a la propiedad</h3><p>Reclamos y procesos por afectación a tu propiedad.</p></div>
-    <div class="card"><h3>Elaboración de minutas</h3><p>Redacción de minutas para trámites legales.</p></div>
-    <div class="card"><h3>Elaboración de contratos</h3><p>Contratos a tu medida, revisados con respaldo legal.</p></div>
+    <a class="card card-link" href="servicios/procesos-de-alimentos.html"><h3>Procesos de alimentos</h3><p>Demandas y trámites de pensión alimenticia.</p><span class="more">Ver más &rarr;</span></a>
+    <a class="card card-link" href="servicios/rectificacion-de-partida.html"><h3>Rectificación de partida</h3><p>Corrección de datos en actas y partidas registrales.</p><span class="more">Ver más &rarr;</span></a>
+    <a class="card card-link" href="servicios/tenencia.html"><h3>Tenencia</h3><p>Procesos de tenencia y custodia de menores.</p><span class="more">Ver más &rarr;</span></a>
+    <a class="card card-link" href="servicios/sucesion-intestada.html"><h3>Sucesión intestada</h3><p>Trámite de herencias cuando no existe testamento.</p><span class="more">Ver más &rarr;</span></a>
+    <a class="card card-link" href="servicios/prescripcion-adquisitiva.html"><h3>Prescripción adquisitiva</h3><p>Formalización de la propiedad por posesión.</p><span class="more">Ver más &rarr;</span></a>
+    <a class="card card-link" href="servicios/saneamiento-de-predios.html"><h3>Saneamiento de predios</h3><p>Regularización legal de terrenos y propiedades.</p><span class="more">Ver más &rarr;</span></a>
+    <a class="card card-link" href="servicios/danos-a-la-propiedad.html"><h3>Daños a la propiedad</h3><p>Reclamos y procesos por afectación a tu propiedad.</p><span class="more">Ver más &rarr;</span></a>
+    <a class="card card-link" href="servicios/elaboracion-de-minutas.html"><h3>Elaboración de minutas</h3><p>Redacción de minutas para trámites legales.</p><span class="more">Ver más &rarr;</span></a>
+    <a class="card card-link" href="servicios/elaboracion-de-contratos.html"><h3>Elaboración de contratos</h3><p>Contratos a tu medida, revisados con respaldo legal.</p><span class="more">Ver más &rarr;</span></a>
   </div>
   <div class="tags">
-    <span class="tag">Centro de conciliación</span>
-    <span class="tag">Cartas notariales</span>
-    <span class="tag">Actas de matrimonio</span>
+    <a class="tag tag-link" href="servicios/centro-de-conciliacion.html">Centro de conciliación <span class="more">Ver más &rarr;</span></a>
+    <a class="tag tag-link" href="servicios/cartas-notariales.html">Cartas notariales <span class="more">Ver más &rarr;</span></a>
+    <a class="tag tag-link" href="servicios/actas-de-matrimonio.html">Actas de matrimonio <span class="more">Ver más &rarr;</span></a>
   </div>
 </section>
 
@@ -251,8 +257,7 @@
 <footer>
   <div class="brand-text">J&amp;S</div>
   <p>Jr. Bolognesi N°533, Supe pueblo, Barranca (frente a la Plaza de Armas)</p>
-  <p>Jurídico: WhatsApp 956 771 681 · Tel 993 793 224 · Ejuridicojys@gmail.com</p>
-  <p>Inmobiliario: WhatsApp 995 149 635 / 956 764 364</p>
+  <p>WhatsApp y teléfono <a href="tel:+51956764364">956 764 364</a> · Ejuridicojys@gmail.com</p>
   <div class="social">
     <a href="https://www.instagram.com/estudio.juridico.jys" aria-label="Instagram jurídico">ig·legal</a>
     <a href="https://www.instagram.com/grupoinmobiliariojys" aria-label="Instagram inmobiliario">ig·inmob</a>
@@ -262,7 +267,7 @@
   <p><a href="terminos.html" style="color:var(--gold-light)">Términos y condiciones / Política de privacidad</a></p>
 </footer>
 
-<a class="wa-float" href="https://wa.me/51956771681?text=Hola%2C%20quiero%20información" aria-label="Chatea por WhatsApp" title="Chatea por WhatsApp">💬</a>
+<a class="wa-float" href="https://wa.me/51956764364?text=Hola%2C%20quiero%20información" aria-label="Chatea por WhatsApp" title="Chatea por WhatsApp">💬</a>
 
 <div class="lightbox" id="lightbox">
   <div class="lightbox-content">
@@ -275,8 +280,8 @@
 </div>
 
 <script>
-const WHATSAPP_NUMBER = "51956771681";
-const REALESTATE_WHATSAPP = "51995149635";
+const WHATSAPP_NUMBER = "51956764364";
+const REALESTATE_WHATSAPP = "51956764364";
 
 const FEATURE_ICONS = {
   "sunarp": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>',
