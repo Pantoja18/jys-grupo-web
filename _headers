@@ -1,0 +1,3 @@
+# Cloudflare Pages: que el HTML y los archivos de la web no se guarden días en la caché.
+/*
+  Cache-Control: public, max-age=0, must-revalidate
