@@ -76,6 +76,11 @@ h2{font-size:22px;color:var(--gold-light);margin-bottom:14px;}
 .tag:hover{border-color:var(--gold);}
 
 /* Footer (igual que index.html) */
+.legal-links{margin-top:8px;}
+.legal-links a{color:var(--gold-light);white-space:nowrap;}
+.legal-links a:hover{text-decoration:underline;}
+.lr-icon{vertical-align:-2px;}
+
 footer{border-top:1px solid rgba(201,162,39,0.2);padding:40px 20px;text-align:center;color:var(--text-muted);font-size:13px;}
 footer p{margin-bottom:4px;}
 .social{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:16px 0;}
